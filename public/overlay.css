@@ -1,0 +1,140 @@
+/* =========================================================
+   OBS ブラウザソース用のオーバーレイ
+   - 背景は完全に透明（OBS側の設定は不要）
+   - 画面端に置けるコンパクトなカード
+   ========================================================= */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", system-ui, sans-serif;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- カード本体 ---------- */
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: stretch;
+  width: max-content;
+  max-width: 460px;
+  min-width: 300px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(12, 16, 30, .88), rgba(26, 16, 46, .88));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .10) inset;
+  backdrop-filter: blur(2px);
+
+  /* 表示・非表示のアニメーション */
+  transform: translateX(0);
+  opacity: 1;
+  transition: opacity .35s ease, transform .35s ease;
+}
+
+.overlay.is-hidden {
+  opacity: 0;
+  transform: translateX(-16px);
+  pointer-events: none;
+}
+
+/* 対戦者が切り替わった瞬間の一瞬の演出 */
+.overlay.is-swap { animation: swap .45s ease; }
+@keyframes swap {
+  0%   { transform: translateX(-10px); opacity: .2; }
+  100% { transform: translateX(0);     opacity: 1; }
+}
+
+/* 左端のアクセントライン */
+.accent {
+  width: 6px;
+  flex: none;
+  background: linear-gradient(180deg, #45b6ff, #a45cff);
+}
+
+.body {
+  padding: 9px 16px 10px 13px;
+  min-width: 0;
+}
+
+/* ---------- 見出し行 ---------- */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #45b6ff, #a45cff);
+  color: #08111f;
+  flex: none;
+}
+
+.match-no {
+  font-size: 11px;
+  font-weight: 700;
+  color: #b9c6e6;
+  letter-spacing: .04em;
+  white-space: nowrap;
+}
+
+/* ---------- リスナー名 / デッキ名 ---------- */
+.name {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: .01em;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.deck {
+  font-size: 13px;
+  font-weight: 600;
+  color: #8fd7ff;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 本日の成績 ---------- */
+.record {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, .13);
+  font-size: 11px;
+  color: #c6cfe4;
+  white-space: nowrap;
+}
+
+.record b { font-size: 14px; font-weight: 700; }
+.rec-win b  { color: #4fe39b; }
+.rec-lose b { color: #ff7b86; }
+.rec-rate b { color: #7dc4ff; }
+
+/* 待機中の表示 */
+.overlay.is-idle .name { color: #c9d3ea; }
+.overlay.is-idle .accent { background: linear-gradient(180deg, #6b7396, #4a5170); }
+.overlay.is-idle .tag { background: #4a5170; color: #e6ebf7; }
+
+/* 成績を隠す（?stats=0） */
+.overlay.no-record .record { display: none; }

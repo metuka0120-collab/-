@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OBS表示 | デュエマプレイス 参加型配信ツール</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
+<link rel="stylesheet" href="/overlay.css">
+</head>
+<body>
+
+<div id="overlay" class="overlay is-hidden">
+  <div class="accent"></div>
+
+  <div class="body">
+    <div class="head">
+      <span class="tag">対戦中</span>
+      <span class="match-no" id="match-no">本日 1 戦目</span>
+    </div>
+
+    <div class="name" id="name">-</div>
+    <div class="deck" id="deck">-</div>
+
+    <div class="record" id="record">
+      <span class="rec rec-win"><b id="rec-win">0</b>勝</span>
+      <span class="rec rec-lose"><b id="rec-lose">0</b>敗</span>
+      <span class="rec rec-rate">勝率 <b id="rec-rate">0%</b></span>
+    </div>
+  </div>
+</div>
+
+<script src="/overlay.js"></script>
+</body>
+</html>
