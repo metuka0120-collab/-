@@ -3,81 +3,151 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>管理画面 | デュエマプレイス 参加型配信ツール</title>
+<title>対戦記録 | デュエマプレイス 配信ツール</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
 <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
 
 <header class="topbar">
-  <h1>デュエマプレイス 参加型配信ツール</h1>
+  <h1>デュエマプレイス 対戦記録</h1>
   <div class="topbar-right">
-    <a class="overlay-link" href="/overlay" target="_blank" rel="noopener">OBS表示画面を開く</a>
+    <a class="link" href="/summary" target="_blank" rel="noopener">まとめ画像をつくる</a>
+    <a class="link" href="/overlay" target="_blank" rel="noopener">OBS表示画面</a>
     <span id="conn" class="conn conn-off">接続中…</span>
   </div>
 </header>
 
 <main class="layout">
 
-  <!-- 左カラム -->
-  <div class="col">
+  <!-- 左：入力 -->
+  <div class="col col-input">
 
-    <section class="card">
-      <h2>参加者を登録</h2>
-      <form id="add-form" class="add-form" autocomplete="off">
-        <label>
-          <span>リスナー名</span>
-          <input id="add-name" type="text" placeholder="例）でゅえまくん" maxlength="40" required>
-        </label>
-        <label>
-          <span>使用デッキ名</span>
-          <input id="add-deck" type="text" placeholder="例）赤単我我我" maxlength="40">
-        </label>
-        <button type="submit" class="btn btn-primary">待機列に追加</button>
-      </form>
-      <p id="add-error" class="error" hidden></p>
-    </section>
+    <section class="card" id="record-card">
+      <h2>対戦を記録する</h2>
 
-    <section class="card">
-      <h2>現在の対戦者</h2>
-      <div id="current-area"></div>
+      <div class="tabs" role="tablist">
+        <button type="button" class="tab is-on" data-tab="live" role="tab" aria-selected="true">対戦中に記録</button>
+        <button type="button" class="tab" data-tab="quick" role="tab" aria-selected="false">終わった対戦を記録</button>
+      </div>
+
+      <!-- 対戦中モード -->
+      <div class="tab-panel" data-panel="live">
+        <div id="current-area"></div>
+      </div>
+
+      <!-- あとから記録モード -->
+      <div class="tab-panel" data-panel="quick" hidden>
+        <form id="quick-form" class="form" autocomplete="off">
+          <div class="two">
+            <label class="field">
+              <span>リスナー名</span>
+              <input type="text" id="q-name" list="name-list" placeholder="例）でゅえまくん" maxlength="40" required>
+            </label>
+            <label class="field">
+              <span>相手のデッキ</span>
+              <input type="text" id="q-deck" list="deck-list" placeholder="例）青黒魔導具" maxlength="40">
+            </label>
+          </div>
+          <label class="field">
+            <span>自分のデッキ<em>（空欄なら設定の値）</em></span>
+            <input type="text" id="q-mydeck" list="mydeck-list" placeholder="例）赤単我我我" maxlength="40">
+          </label>
+          <div class="results">
+            <button type="button" class="btn btn-win" data-q-result="win">勝ち</button>
+            <button type="button" class="btn btn-lose" data-q-result="lose">負け</button>
+          </div>
+          <label class="field">
+            <span>試合の感想</span>
+            <textarea id="q-comment" placeholder="例）最後のシールドトリガーが決まった" maxlength="200"></textarea>
+          </label>
+          <button type="submit" class="btn btn-primary">この対戦を履歴に追加</button>
+        </form>
+      </div>
     </section>
 
     <section class="card">
       <h2>本日の成績</h2>
-      <div class="stats" id="stats">
-        <div class="stat stat-win"><span class="stat-label">勝利</span><span class="stat-value" id="stat-win">0</span></div>
-        <div class="stat stat-lose"><span class="stat-label">敗北</span><span class="stat-value" id="stat-lose">0</span></div>
-        <div class="stat"><span class="stat-label">試合数</span><span class="stat-value" id="stat-total">0</span></div>
-        <div class="stat stat-rate"><span class="stat-label">勝率</span><span class="stat-value" id="stat-rate">0%</span></div>
+      <div class="stats">
+        <div class="stat w"><span>勝利</span><b id="s-win">0</b></div>
+        <div class="stat l"><span>敗北</span><b id="s-lose">0</b></div>
+        <div class="stat"><span>試合数</span><b id="s-total">0</b></div>
+        <div class="stat r"><span>勝率</span><b id="s-rate">0%</b></div>
       </div>
-      <p class="hint" id="stat-date"></p>
+      <p class="hint" id="s-date"></p>
+      <div class="total-line">
+        <span>通算</span>
+        <b id="t-line">0戦 0勝0敗</b>
+        <span id="t-days"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>配信の設定</h2>
+      <form id="settings-form" class="form" autocomplete="off">
+        <label class="field">
+          <span>配信タイトル<em>（まとめ画像に出ます）</em></span>
+          <input type="text" id="set-title" maxlength="40" placeholder="視聴者参加型対戦">
+        </label>
+        <div class="two">
+          <label class="field">
+            <span>自分の名前</span>
+            <input type="text" id="set-myname" maxlength="20" placeholder="配信者">
+          </label>
+          <label class="field">
+            <span>自分のデッキ</span>
+            <input type="text" id="set-mydeck" list="mydeck-list" maxlength="40" placeholder="例）赤単我我我">
+          </label>
+        </div>
+        <button type="submit" class="btn btn-ghost">保存</button>
+        <p class="hint">自分のデッキは、対戦を記録するときの初期値になります。デッキを変えたらここを書き換えてください。</p>
+      </form>
     </section>
 
   </div>
 
-  <!-- 右カラム -->
-  <div class="col">
+  <!-- 右：履歴 -->
+  <div class="col col-history">
 
     <section class="card">
-      <h2>参加待機列 <span class="count" id="queue-count">0</span></h2>
-      <ul id="queue-list" class="list"></ul>
+      <h2>
+        対戦履歴 <span class="count" id="h-count">0</span>
+        <a class="link link-inline" href="/summary" target="_blank" rel="noopener">まとめ画像 →</a>
+      </h2>
+
+      <div class="filters">
+        <input type="search" id="f-text" placeholder="リスナー名・デッキ・感想で検索" maxlength="40">
+        <select id="f-day">
+          <option value="today">本日のみ</option>
+          <option value="all">すべての日</option>
+        </select>
+        <select id="f-result">
+          <option value="all">勝敗すべて</option>
+          <option value="win">勝ちのみ</option>
+          <option value="lose">負けのみ</option>
+        </select>
+        <button type="button" class="btn btn-ghost btn-sm" id="clear-today">本日の履歴をリセット</button>
+      </div>
+
+      <div id="history-area"></div>
     </section>
 
     <section class="card">
-      <h2>対戦履歴 <span class="count" id="history-count">0</span></h2>
-      <div class="history-tools">
-        <label class="checkbox">
-          <input type="checkbox" id="history-today-only" checked>
-          <span>本日のみ表示</span>
-        </label>
-        <button type="button" class="btn btn-ghost btn-small" id="clear-today">本日の履歴をリセット</button>
-      </div>
-      <ul id="history-list" class="list"></ul>
+      <h2>リスナー別 通算成績 <span class="count" id="o-count">0</span></h2>
+      <div id="opponents-area"></div>
+    </section>
+
+    <section class="card">
+      <h2>自分のデッキ別 通算成績</h2>
+      <div id="mydecks-area"></div>
     </section>
 
   </div>
 </main>
+
+<datalist id="name-list"></datalist>
+<datalist id="deck-list"></datalist>
+<datalist id="mydeck-list"></datalist>
 
 <script src="/admin.js"></script>
 </body>

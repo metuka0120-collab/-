@@ -1,110 +1,123 @@
 'use strict';
 
 /* =========================================================
-   管理画面のフロントエンド
+   対戦記録画面
    - 状態はサーバーが持つ。この画面は WebSocket で受け取って描画するだけ。
-   - 操作は fetch で API を呼び、結果は WebSocket 経由で全画面に反映される。
+   - 参加者の受付・整列はワンコメなど別ツールに任せ、ここは対戦履歴に専念する。
    ========================================================= */
 
-/** 画面ローカルのUI状態（入力途中の内容が再描画で消えないように保持する） */
-const ui = {
-  editParticipantId: null, // 待機列で編集中の参加者
-  editHistoryId: null,     // 編集中の履歴
-  currentId: null,         // 対戦中の参加者ID（変わったら入力欄をリセットする）
-  result: null,            // 'win' | 'lose'
-  comment: '',             // 感想の入力途中の内容
-  historyTodayOnly: true
+var state = {
+  settings: { streamTitle: '', myName: '', myDeck: '' },
+  current: null,
+  history: [],
+  stats: { wins: 0, losses: 0, total: 0, winRate: 0, date: '' },
+  totalStats: { wins: 0, losses: 0, total: 0, winRate: 0, days: 0 },
+  opponents: [],
+  myDecks: []
 };
 
-let state = { queue: [], current: null, history: [], stats: { wins: 0, losses: 0, total: 0, winRate: 0, date: '' } };
-
-// ---------------------------------------------------------
-// DOM
-// ---------------------------------------------------------
-const el = {
-  conn: document.getElementById('conn'),
-  addForm: document.getElementById('add-form'),
-  addName: document.getElementById('add-name'),
-  addDeck: document.getElementById('add-deck'),
-  addError: document.getElementById('add-error'),
-  currentArea: document.getElementById('current-area'),
-  queueList: document.getElementById('queue-list'),
-  queueCount: document.getElementById('queue-count'),
-  historyList: document.getElementById('history-list'),
-  historyCount: document.getElementById('history-count'),
-  historyTodayOnly: document.getElementById('history-today-only'),
-  clearToday: document.getElementById('clear-today'),
-  statWin: document.getElementById('stat-win'),
-  statLose: document.getElementById('stat-lose'),
-  statTotal: document.getElementById('stat-total'),
-  statRate: document.getElementById('stat-rate'),
-  statDate: document.getElementById('stat-date')
+/** 入力途中の内容が再描画で消えないように保持する */
+var ui = {
+  tab: 'live',
+  currentId: null,
+  result: null,       // 対戦中モードの勝敗
+  comment: '',        // 対戦中モードの感想
+  quickResult: null,  // あとから記録モードの勝敗
+  editId: null,       // 編集中の履歴
+  filterText: '',
+  filterDay: 'today',
+  filterResult: 'all',
+  settingsDirty: false
 };
+
+function $(id) { return document.getElementById(id); }
+
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function hhmm(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
+function jpDate(key) {
+  if (!key) return '';
+  var p = String(key).split('-');
+  if (p.length < 3) return key;
+  var week = ['日', '月', '火', '水', '木', '金', '土'];
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  return Number(p[0]) + '年' + Number(p[1]) + '月' + Number(p[2]) + '日（' + week[d.getDay()] + '）';
+}
+
+function normName(name) {
+  return String(name == null ? '' : name).trim().toLowerCase().replace(/\s+/g, '');
+}
+
+/** そのリスナーとの通算成績を数える */
+function h2h(name) {
+  var key = normName(name);
+  var wins = 0, losses = 0;
+  if (!key) return { wins: 0, losses: 0, total: 0 };
+  state.history.forEach(function (h) {
+    if (normName(h.name) !== key) return;
+    if (h.result === 'win') wins++; else losses++;
+  });
+  return { wins: wins, losses: losses, total: wins + losses };
+}
 
 // ---------------------------------------------------------
 // 通信
 // ---------------------------------------------------------
-
-/** APIを呼ぶ。失敗したらアラートで知らせる */
-async function api(method, url, body) {
-  try {
-    const res = await fetch(url, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined
+function api(method, url, body) {
+  return fetch(url, {
+    method: method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  }).then(function (res) {
+    return res.json().catch(function () { return {}; }).then(function (data) {
+      if (!res.ok || data.ok === false) throw new Error(data.error || ('通信に失敗しました (' + res.status + ')'));
+      if (data.state) applyState(data.state);
+      return data;
     });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok || data.ok === false) {
-      throw new Error(data.error || `通信に失敗しました (${res.status})`);
-    }
-    if (data.state) applyState(data.state);
-    return data;
-  } catch (err) {
+  }).catch(function (err) {
     window.alert(err.message || '通信に失敗しました。サーバーが起動しているか確認してください。');
     throw err;
-  }
+  });
 }
 
-let socket = null;
-let reconnectDelay = 500;
+var reconnectDelay = 500;
 
 function connect() {
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  socket = new WebSocket(`${protocol}//${location.host}/ws`);
+  var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  var socket = new WebSocket(protocol + '//' + location.host + '/ws');
 
-  socket.addEventListener('open', () => {
-    reconnectDelay = 500;
-    setConnected(true);
-  });
-
-  socket.addEventListener('message', (event) => {
-    let message;
-    try {
-      message = JSON.parse(event.data);
-    } catch (err) {
-      return;
-    }
+  socket.addEventListener('open', function () { reconnectDelay = 500; setConnected(true); });
+  socket.addEventListener('message', function (event) {
+    var message;
+    try { message = JSON.parse(event.data); } catch (e) { return; }
     if (message.type === 'state') applyState(message.payload);
   });
-
-  socket.addEventListener('close', () => {
+  socket.addEventListener('close', function () {
     setConnected(false);
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 5000);
   });
-
-  socket.addEventListener('error', () => socket.close());
+  socket.addEventListener('error', function () { socket.close(); });
 }
 
-function setConnected(connected) {
-  el.conn.textContent = connected ? '● 同期中' : '× 未接続（再接続します）';
-  el.conn.className = 'conn ' + (connected ? 'conn-on' : 'conn-off');
+function setConnected(on) {
+  $('conn').textContent = on ? '● 同期中' : '× 未接続（再接続します）';
+  $('conn').className = 'conn ' + (on ? 'conn-on' : 'conn-off');
 }
 
 function applyState(next) {
   state = next;
-  // 対戦者が変わったら、入力途中の勝敗・感想はリセットする
-  const currentId = state.current ? state.current.id : null;
+  var currentId = state.current ? state.current.id : null;
   if (currentId !== ui.currentId) {
     ui.currentId = currentId;
     ui.result = null;
@@ -116,366 +129,339 @@ function applyState(next) {
 // ---------------------------------------------------------
 // 描画
 // ---------------------------------------------------------
-
-function escapeHtml(value) {
-  return String(value == null ? '' : value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function formatTime(iso) {
-  if (!iso) return '';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '';
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
-}
-
-function formatDate(key) {
-  if (!key) return '';
-  const [y, m, d] = key.split('-');
-  return `${Number(y)}年${Number(m)}月${Number(d)}日`;
-}
-
 function render() {
   renderCurrent();
-  renderQueue();
   renderStats();
+  renderSettings();
   renderHistory();
+  renderRankings();
+  renderDatalists();
 }
 
-// --- 現在の対戦者 ---
+// --- 対戦中 ---
 function renderCurrent() {
-  const current = state.current;
+  var box = $('current-area');
+  var c = state.current;
 
-  if (!current) {
-    el.currentArea.innerHTML =
-      '<div class="current-empty">対戦中の参加者はいません。<br>待機列から「対戦開始」を押してください。</div>';
+  if (!c) {
+    box.innerHTML =
+      '<form id="start-form" class="form" autocomplete="off">' +
+        '<div class="two">' +
+          '<label class="field"><span>リスナー名</span>' +
+          '<input type="text" id="st-name" list="name-list" placeholder="例）でゅえまくん" maxlength="40" required></label>' +
+          '<label class="field"><span>相手のデッキ</span>' +
+          '<input type="text" id="st-deck" list="deck-list" placeholder="例）青黒魔導具" maxlength="40"></label>' +
+        '</div>' +
+        '<button type="submit" class="btn btn-primary">対戦開始（OBSに表示）</button>' +
+        '<p class="hint">開始するとOBSのオーバーレイに出ます。終わったら勝敗と感想を入れて履歴に保存します。</p>' +
+      '</form>';
+
+    $('start-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = $('st-name').value.trim();
+      if (!name) { window.alert('リスナー名を入力してください。'); return; }
+      api('POST', '/api/match/start', { name: name, deck: $('st-deck').value.trim() });
+    });
     return;
   }
 
-  el.currentArea.innerHTML = `
-    <div class="current-box">
-      <div class="current-no">本日 ${current.matchNumber} 戦目 ／ 開始 ${formatTime(current.startedAt)}</div>
-      <div class="current-name">${escapeHtml(current.name)}</div>
-      <div class="current-deck">${current.deck ? escapeHtml(current.deck) : 'デッキ未登録'}</div>
-    </div>
+  var rec = h2h(c.name);
+  box.innerHTML =
+    '<div class="cur-box">' +
+      '<div class="cur-no">本日 ' + c.matchNumber + ' 戦目 ／ 開始 ' + hhmm(c.startedAt) + '</div>' +
+      '<div class="cur-name">' + esc(c.name) + '</div>' +
+      '<div class="cur-deck">' + (c.deck ? esc(c.deck) : 'デッキ未入力') +
+        (c.myDeck ? ' <span class="vs">VS</span> 自分: ' + esc(c.myDeck) : '') + '</div>' +
+      (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + '勝' + rec.losses + '敗</div>' : '') +
+    '</div>' +
+    '<div class="form" style="margin-top:12px">' +
+      '<div class="results">' +
+        '<button type="button" class="btn btn-win ' + (ui.result === 'win' ? 'on' : '') + '" data-result="win">勝ち</button>' +
+        '<button type="button" class="btn btn-lose ' + (ui.result === 'lose' ? 'on' : '') + '" data-result="lose">負け</button>' +
+      '</div>' +
+      '<label class="field"><span>試合の感想</span>' +
+      '<textarea id="cmt" maxlength="200" placeholder="例）最後のシールドトリガーが決まった">' + esc(ui.comment) + '</textarea></label>' +
+      '<div class="cur-actions">' +
+        '<button type="button" class="btn btn-primary" id="fin">対戦終了して保存</button>' +
+        '<button type="button" class="btn btn-ghost" id="cancel">取り消す</button>' +
+      '</div>' +
+    '</div>';
 
-    <div class="finish-box">
-      <div class="result-buttons">
-        <button type="button" class="btn btn-win ${ui.result === 'win' ? 'selected' : ''}" data-result="win">勝ち</button>
-        <button type="button" class="btn btn-lose ${ui.result === 'lose' ? 'selected' : ''}" data-result="lose">負け</button>
-      </div>
-      <label>
-        <span>試合の感想</span>
-        <textarea id="finish-comment" placeholder="例）最後のドローが完璧だった">${escapeHtml(ui.comment)}</textarea>
-      </label>
-      <div class="finish-actions">
-        <button type="button" class="btn btn-primary" id="finish-save">対戦終了して履歴に保存</button>
-        <button type="button" class="btn btn-ghost" id="finish-cancel">待機列に戻す</button>
-      </div>
-    </div>
-  `;
-
-  el.currentArea.querySelectorAll('[data-result]').forEach((button) => {
-    button.addEventListener('click', () => {
-      ui.result = button.dataset.result;
-      renderCurrent();
-    });
+  Array.prototype.forEach.call(box.querySelectorAll('[data-result]'), function (b) {
+    b.addEventListener('click', function () { ui.result = b.dataset.result; renderCurrent(); });
   });
-
-  const comment = document.getElementById('finish-comment');
-  comment.addEventListener('input', () => {
-    ui.comment = comment.value;
+  $('cmt').addEventListener('input', function (e) { ui.comment = e.target.value; });
+  $('fin').addEventListener('click', function () {
+    if (!ui.result) { window.alert('「勝ち」か「負け」を選んでください。'); return; }
+    api('POST', '/api/match/finish', { result: ui.result, comment: ui.comment });
   });
-
-  document.getElementById('finish-save').addEventListener('click', async () => {
-    if (!ui.result) {
-      window.alert('「勝ち」か「負け」を選んでください。');
-      return;
-    }
-    await api('POST', '/api/current/finish', { result: ui.result, comment: ui.comment });
-  });
-
-  document.getElementById('finish-cancel').addEventListener('click', async () => {
-    if (!window.confirm('この対戦を記録せずに待機列へ戻しますか？')) return;
-    await api('POST', '/api/current/cancel');
+  $('cancel').addEventListener('click', function () {
+    if (!window.confirm('この対戦を記録せずに取り消しますか？')) return;
+    api('POST', '/api/match/cancel');
   });
 }
 
-// --- 待機列 ---
-function renderQueue() {
-  el.queueCount.textContent = state.queue.length;
-
-  if (state.queue.length === 0) {
-    el.queueList.innerHTML = '<li class="empty">待機中の参加者はいません。</li>';
-    return;
-  }
-
-  el.queueList.innerHTML = state.queue
-    .map((participant, index) =>
-      participant.id === ui.editParticipantId
-        ? queueEditRow(participant)
-        : queueRow(participant, index)
-    )
-    .join('');
-
-  bindQueueEvents();
-}
-
-function queueRow(participant, index) {
-  return `
-    <li class="row" data-id="${participant.id}">
-      <span class="row-order">${index + 1}</span>
-      <div class="row-main">
-        <div class="row-name">${escapeHtml(participant.name)}</div>
-        <div class="row-deck">${participant.deck ? escapeHtml(participant.deck) : 'デッキ未登録'}</div>
-      </div>
-      <div class="row-actions">
-        <button type="button" class="btn btn-primary btn-small" data-action="start">対戦開始</button>
-        <button type="button" class="btn btn-ghost btn-small" data-action="up" title="上へ">▲</button>
-        <button type="button" class="btn btn-ghost btn-small" data-action="down" title="下へ">▼</button>
-        <button type="button" class="btn btn-ghost btn-small" data-action="edit">編集</button>
-        <button type="button" class="btn btn-danger btn-small" data-action="delete">削除</button>
-      </div>
-    </li>
-  `;
-}
-
-function queueEditRow(participant) {
-  return `
-    <li class="row" data-id="${participant.id}">
-      <form class="edit-form" data-action="save-edit">
-        <div class="edit-fields">
-          <label>
-            <span>リスナー名</span>
-            <input type="text" name="name" value="${escapeHtml(participant.name)}" maxlength="40" required>
-          </label>
-          <label>
-            <span>使用デッキ名</span>
-            <input type="text" name="deck" value="${escapeHtml(participant.deck)}" maxlength="40">
-          </label>
-        </div>
-        <div class="edit-actions">
-          <button type="button" class="btn btn-ghost btn-small" data-action="cancel-edit">キャンセル</button>
-          <button type="submit" class="btn btn-primary btn-small">保存</button>
-        </div>
-      </form>
-    </li>
-  `;
-}
-
-function bindQueueEvents() {
-  el.queueList.querySelectorAll('li.row').forEach((row) => {
-    const id = row.dataset.id;
-
-    row.querySelectorAll('button[data-action]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const action = button.dataset.action;
-        if (action === 'start') {
-          await api('POST', `/api/participants/${id}/start`);
-        } else if (action === 'up' || action === 'down') {
-          await api('POST', `/api/participants/${id}/move`, { direction: action === 'up' ? 'up' : 'down' });
-        } else if (action === 'edit') {
-          ui.editParticipantId = id;
-          renderQueue();
-        } else if (action === 'cancel-edit') {
-          ui.editParticipantId = null;
-          renderQueue();
-        } else if (action === 'delete') {
-          const participant = state.queue.find((p) => p.id === id);
-          const label = participant ? participant.name : 'この参加者';
-          if (!window.confirm(`「${label}」を待機列から削除しますか？`)) return;
-          await api('DELETE', `/api/participants/${id}`);
-        }
-      });
-    });
-
-    const form = row.querySelector('form[data-action="save-edit"]');
-    if (form) {
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const name = form.elements.name.value.trim();
-        const deck = form.elements.deck.value.trim();
-        if (!name) {
-          window.alert('リスナー名を入力してください。');
-          return;
-        }
-        ui.editParticipantId = null;
-        await api('PUT', `/api/participants/${id}`, { name, deck });
-      });
-    }
-  });
-}
-
-// --- 本日の成績 ---
+// --- 成績 ---
 function renderStats() {
-  const stats = state.stats || { wins: 0, losses: 0, total: 0, winRate: 0, date: '' };
-  el.statWin.textContent = stats.wins;
-  el.statLose.textContent = stats.losses;
-  el.statTotal.textContent = stats.total;
-  el.statRate.textContent = `${stats.winRate}%`;
-  el.statDate.textContent = `集計日：${formatDate(stats.date)}（日付が変わると自動でリセットされます）`;
+  var s = state.stats || {};
+  var t = state.totalStats || {};
+  $('s-win').textContent = s.wins || 0;
+  $('s-lose').textContent = s.losses || 0;
+  $('s-total').textContent = s.total || 0;
+  $('s-rate').textContent = (s.winRate || 0) + '%';
+  $('s-date').textContent = '集計日：' + jpDate(s.date) + '（日付が変わると自動で 0 に戻ります）';
+  $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + '勝' + (t.losses || 0) + '敗　勝率 ' + (t.winRate || 0) + '%';
+  $('t-days').textContent = t.days ? '（' + t.days + '日ぶん）' : '';
+}
+
+// --- 設定 ---
+function renderSettings() {
+  if (ui.settingsDirty) return; // 入力中は上書きしない
+  var s = state.settings || {};
+  $('set-title').value = s.streamTitle || '';
+  $('set-myname').value = s.myName || '';
+  $('set-mydeck').value = s.myDeck || '';
+}
+
+// --- 入力補助（過去に使った名前・デッキ名を候補に出す） ---
+function renderDatalists() {
+  function fill(id, values) {
+    $(id).innerHTML = values.slice(0, 60).map(function (v) { return '<option value="' + esc(v) + '"></option>'; }).join('');
+  }
+  var names = [], decks = [], myDecks = [];
+  state.history.forEach(function (h) {
+    if (h.name && names.indexOf(h.name) === -1) names.push(h.name);
+    if (h.deck && decks.indexOf(h.deck) === -1) decks.push(h.deck);
+    if (h.myDeck && myDecks.indexOf(h.myDeck) === -1) myDecks.push(h.myDeck);
+  });
+  fill('name-list', names);
+  fill('deck-list', decks);
+  fill('mydeck-list', myDecks);
 }
 
 // --- 履歴 ---
+function filtered() {
+  var today = state.stats ? state.stats.date : '';
+  var text = ui.filterText.trim().toLowerCase();
+
+  return state.history.filter(function (h) {
+    if (ui.filterDay === 'today' && h.date !== today) return false;
+    if (ui.filterResult !== 'all' && h.result !== ui.filterResult) return false;
+    if (!text) return true;
+    return [h.name, h.deck, h.myDeck, h.comment].join(' ').toLowerCase().indexOf(text) !== -1;
+  });
+}
+
 function renderHistory() {
-  const today = state.stats ? state.stats.date : '';
-  const records = ui.historyTodayOnly
-    ? state.history.filter((record) => record.date === today)
-    : state.history;
+  var rows = filtered();
+  var area = $('history-area');
+  $('h-count').textContent = rows.length;
 
-  el.historyCount.textContent = records.length;
-
-  if (records.length === 0) {
-    el.historyList.innerHTML = '<li class="empty">まだ対戦履歴はありません。</li>';
+  if (!rows.length) {
+    area.innerHTML = '<div class="empty">' +
+      (state.history.length ? '条件に合う対戦がありません。' : 'まだ対戦履歴はありません。左の画面から記録できます。') +
+      '</div>';
     return;
   }
 
-  el.historyList.innerHTML = records
-    .map((record) => (record.id === ui.editHistoryId ? historyEditRow(record) : historyRow(record)))
-    .join('');
+  // 日付ごとにまとめる（新しい日が上）
+  var days = [];
+  var byDay = {};
+  rows.forEach(function (h) {
+    if (!byDay[h.date]) { byDay[h.date] = []; days.push(h.date); }
+    byDay[h.date].push(h);
+  });
 
-  bindHistoryEvents();
+  area.innerHTML = days.map(function (day) {
+    var list = byDay[day];
+    var wins = list.filter(function (h) { return h.result === 'win'; }).length;
+    var losses = list.length - wins;
+    return '<div class="day-head"><b>' + jpDate(day) + '</b>' +
+      '<span class="day-rec">' + list.length + '戦 ' + wins + '勝' + losses + '敗</span></div>' +
+      list.map(matchCard).join('');
+  }).join('');
+
+  bindHistory();
 }
 
-function historyRow(record) {
-  const badge = record.result === 'win'
-    ? '<span class="badge badge-win">勝ち</span>'
-    : '<span class="badge badge-lose">負け</span>';
+function matchCard(h) {
+  if (h.id === ui.editId) return matchEditCard(h);
 
-  return `
-    <li class="row" data-id="${record.id}">
-      <span class="row-order">${record.matchNumber || '-'}</span>
-      ${badge}
-      <div class="row-main">
-        <div class="row-name">${escapeHtml(record.name)}</div>
-        <div class="row-deck">${record.deck ? escapeHtml(record.deck) : 'デッキ未登録'}</div>
-        ${record.comment ? `<div class="row-comment">💬 ${escapeHtml(record.comment)}</div>` : ''}
-      </div>
-      <span class="row-time">${formatTime(record.finishedAt)}</span>
-      <div class="row-actions">
-        <button type="button" class="btn btn-ghost btn-small" data-action="edit">編集</button>
-        <button type="button" class="btn btn-danger btn-small" data-action="delete">削除</button>
-      </div>
-    </li>
-  `;
+  var rec = h2h(h.name);
+  return '<div class="match ' + h.result + '" data-id="' + h.id + '">' +
+    '<div class="m-top">' +
+      '<span class="m-no">' + (h.matchNumber || '-') + '戦目</span>' +
+      '<span class="m-badge ' + h.result + '">' + (h.result === 'win' ? '勝ち' : '負け') + '</span>' +
+      '<span class="m-name">' + esc(h.name) + '</span>' +
+      '<span class="m-time">' + hhmm(h.finishedAt) + '</span>' +
+      '<span class="m-acts">' +
+        '<button type="button" class="btn btn-ghost btn-sm" data-a="edit">編集</button>' +
+        '<button type="button" class="btn btn-danger btn-sm" data-a="del">削除</button>' +
+      '</span>' +
+    '</div>' +
+    '<div class="m-decks">' +
+      '<span class="deck-chip"><b>相手</b>' + (h.deck ? esc(h.deck) : '未入力') + '</span>' +
+      (h.myDeck ? '<span class="vs">VS</span><span class="deck-chip mine"><b>自分</b>' + esc(h.myDeck) + '</span>' : '') +
+    '</div>' +
+    (h.comment ? '<div class="m-comment">' + esc(h.comment) + '</div>' : '') +
+    (rec.total > 1 ? '<div class="m-h2h">このリスナーとは通算 <b>' + rec.total + '戦 ' + rec.wins + '勝' + rec.losses + '敗</b></div>' : '') +
+  '</div>';
 }
 
-function historyEditRow(record) {
-  return `
-    <li class="row" data-id="${record.id}">
-      <form class="edit-form" data-action="save-edit">
-        <div class="edit-fields">
-          <label>
-            <span>リスナー名</span>
-            <input type="text" name="name" value="${escapeHtml(record.name)}" maxlength="40" required>
-          </label>
-          <label>
-            <span>使用デッキ名</span>
-            <input type="text" name="deck" value="${escapeHtml(record.deck)}" maxlength="40">
-          </label>
-        </div>
-        <label>
-          <span>勝敗</span>
-          <select name="result">
-            <option value="win" ${record.result === 'win' ? 'selected' : ''}>勝ち</option>
-            <option value="lose" ${record.result === 'lose' ? 'selected' : ''}>負け</option>
-          </select>
-        </label>
-        <label>
-          <span>試合の感想</span>
-          <textarea name="comment">${escapeHtml(record.comment)}</textarea>
-        </label>
-        <div class="edit-actions">
-          <button type="button" class="btn btn-ghost btn-small" data-action="cancel-edit">キャンセル</button>
-          <button type="submit" class="btn btn-primary btn-small">保存</button>
-        </div>
-      </form>
-    </li>
-  `;
+function matchEditCard(h) {
+  return '<div class="match ' + h.result + '" data-id="' + h.id + '"><form class="m-edit">' +
+    '<div class="two">' +
+      '<label class="field"><span>リスナー名</span><input type="text" name="name" value="' + esc(h.name) + '" maxlength="40" required></label>' +
+      '<label class="field"><span>相手のデッキ</span><input type="text" name="deck" value="' + esc(h.deck) + '" maxlength="40"></label>' +
+    '</div>' +
+    '<div class="two">' +
+      '<label class="field"><span>自分のデッキ</span><input type="text" name="myDeck" value="' + esc(h.myDeck) + '" maxlength="40"></label>' +
+      '<label class="field"><span>勝敗</span><select name="result">' +
+        '<option value="win"' + (h.result === 'win' ? ' selected' : '') + '>勝ち</option>' +
+        '<option value="lose"' + (h.result === 'lose' ? ' selected' : '') + '>負け</option>' +
+      '</select></label>' +
+    '</div>' +
+    '<label class="field"><span>試合の感想</span><textarea name="comment" maxlength="200">' + esc(h.comment) + '</textarea></label>' +
+    '<div class="edit-acts">' +
+      '<button type="button" class="btn btn-ghost btn-sm" data-a="cancel-edit">キャンセル</button>' +
+      '<button type="submit" class="btn btn-primary btn-sm">保存</button>' +
+    '</div>' +
+  '</form></div>';
 }
 
-function bindHistoryEvents() {
-  el.historyList.querySelectorAll('li.row').forEach((row) => {
-    const id = row.dataset.id;
+function bindHistory() {
+  Array.prototype.forEach.call($('history-area').querySelectorAll('.match'), function (card) {
+    var id = card.dataset.id;
 
-    row.querySelectorAll('button[data-action]').forEach((button) => {
-      button.addEventListener('click', async () => {
-        const action = button.dataset.action;
-        if (action === 'edit') {
-          ui.editHistoryId = id;
-          renderHistory();
-        } else if (action === 'cancel-edit') {
-          ui.editHistoryId = null;
-          renderHistory();
-        } else if (action === 'delete') {
-          if (!window.confirm('この履歴を削除しますか？本日の成績も再集計されます。')) return;
-          await api('DELETE', `/api/history/${id}`);
+    Array.prototype.forEach.call(card.querySelectorAll('button[data-a]'), function (b) {
+      b.addEventListener('click', function () {
+        var action = b.dataset.a;
+        if (action === 'edit') { ui.editId = id; renderHistory(); }
+        else if (action === 'cancel-edit') { ui.editId = null; renderHistory(); }
+        else if (action === 'del') {
+          if (!window.confirm('この対戦記録を削除しますか？成績も再集計されます。')) return;
+          api('DELETE', '/api/history/' + id);
         }
       });
     });
 
-    const form = row.querySelector('form[data-action="save-edit"]');
-    if (form) {
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const name = form.elements.name.value.trim();
-        if (!name) {
-          window.alert('リスナー名を入力してください。');
-          return;
-        }
-        const payload = {
-          name,
-          deck: form.elements.deck.value.trim(),
-          result: form.elements.result.value,
-          comment: form.elements.comment.value
-        };
-        ui.editHistoryId = null;
-        await api('PUT', `/api/history/${id}`, payload);
+    var form = card.querySelector('form.m-edit');
+    if (form) form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var name = form.elements.name.value.trim();
+      if (!name) { window.alert('リスナー名を入力してください。'); return; }
+      ui.editId = null;
+      api('PUT', '/api/history/' + id, {
+        name: name,
+        deck: form.elements.deck.value.trim(),
+        myDeck: form.elements.myDeck.value.trim(),
+        result: form.elements.result.value,
+        comment: form.elements.comment.value
       });
-    }
+    });
   });
+}
+
+// --- ランキング ---
+function rankRow(label, sub, rec) {
+  var pct = rec.total ? (rec.wins / rec.total) * 100 : 0;
+  return '<div class="rank-row">' +
+    '<span class="rank-name">' + esc(label) + (sub ? '<span class="rank-sub">' + esc(sub) + '</span>' : '') + '</span>' +
+    '<span class="rank-rec"><span class="w">' + rec.wins + '</span>勝 <span class="l">' + rec.losses + '</span>敗</span>' +
+    '<span class="rank-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
+    '<span class="rank-rate">' + rec.winRate + '%</span>' +
+  '</div>';
+}
+
+function renderRankings() {
+  var opponents = state.opponents || [];
+  $('o-count').textContent = opponents.length;
+  $('opponents-area').innerHTML = opponents.length
+    ? '<div class="rank">' + opponents.slice(0, 50).map(function (o) {
+        return rankRow(o.name, o.decks.join(' / '), o);
+      }).join('') + '</div>'
+    : '<div class="empty">対戦を記録すると、リスナーごとの通算成績が出ます。</div>';
+
+  var myDecks = state.myDecks || [];
+  $('mydecks-area').innerHTML = myDecks.length
+    ? '<div class="rank">' + myDecks.map(function (d) { return rankRow(d.deck, '', d); }).join('') + '</div>'
+    : '<div class="empty">自分のデッキを記録すると、デッキごとの成績が出ます。</div>';
 }
 
 // ---------------------------------------------------------
 // 画面固定の操作
 // ---------------------------------------------------------
-el.addForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const name = el.addName.value.trim();
-  const deck = el.addDeck.value.trim();
 
-  if (!name) {
-    el.addError.textContent = 'リスナー名を入力してください。';
-    el.addError.hidden = false;
-    return;
-  }
-  el.addError.hidden = true;
-
-  await api('POST', '/api/participants', { name, deck });
-  el.addName.value = '';
-  el.addDeck.value = '';
-  el.addName.focus();
+// タブ切り替え
+Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (tab) {
+  tab.addEventListener('click', function () {
+    ui.tab = tab.dataset.tab;
+    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (t) {
+      var on = t.dataset.tab === ui.tab;
+      t.classList.toggle('is-on', on);
+      t.setAttribute('aria-selected', String(on));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('.tab-panel'), function (p) {
+      p.hidden = p.dataset.panel !== ui.tab;
+    });
+  });
 });
 
-el.historyTodayOnly.addEventListener('change', () => {
-  ui.historyTodayOnly = el.historyTodayOnly.checked;
-  renderHistory();
+// あとから記録
+Array.prototype.forEach.call(document.querySelectorAll('[data-q-result]'), function (b) {
+  b.addEventListener('click', function () {
+    ui.quickResult = b.dataset.qResult;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-q-result]'), function (x) {
+      x.classList.toggle('on', x.dataset.qResult === ui.quickResult);
+    });
+  });
 });
 
-el.clearToday.addEventListener('click', async () => {
+$('quick-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var name = $('q-name').value.trim();
+  if (!name) { window.alert('リスナー名を入力してください。'); return; }
+  if (!ui.quickResult) { window.alert('「勝ち」か「負け」を選んでください。'); return; }
+
+  api('POST', '/api/history', {
+    name: name,
+    deck: $('q-deck').value.trim(),
+    myDeck: $('q-mydeck').value.trim(),
+    result: ui.quickResult,
+    comment: $('q-comment').value
+  }).then(function () {
+    $('q-name').value = ''; $('q-deck').value = ''; $('q-comment').value = '';
+    ui.quickResult = null;
+    Array.prototype.forEach.call(document.querySelectorAll('[data-q-result]'), function (x) { x.classList.remove('on'); });
+    $('q-name').focus();
+  });
+});
+
+// 設定
+['set-title', 'set-myname', 'set-mydeck'].forEach(function (id) {
+  $(id).addEventListener('input', function () { ui.settingsDirty = true; });
+});
+
+$('settings-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  ui.settingsDirty = false;
+  api('PUT', '/api/settings', {
+    streamTitle: $('set-title').value.trim(),
+    myName: $('set-myname').value.trim(),
+    myDeck: $('set-mydeck').value.trim()
+  });
+});
+
+// 絞り込み
+$('f-text').addEventListener('input', function (e) { ui.filterText = e.target.value; renderHistory(); });
+$('f-day').addEventListener('change', function (e) { ui.filterDay = e.target.value; renderHistory(); });
+$('f-result').addEventListener('change', function (e) { ui.filterResult = e.target.value; renderHistory(); });
+
+$('clear-today').addEventListener('click', function () {
   if (!window.confirm('本日の対戦履歴をすべて削除します。よろしいですか？（元に戻せません）')) return;
-  await api('POST', '/api/history/clear-today');
+  api('POST', '/api/history/clear-today');
 });
 
 // ---------------------------------------------------------
-// 起動
-// ---------------------------------------------------------
-ui.historyTodayOnly = el.historyTodayOnly.checked;
 render();
 connect();

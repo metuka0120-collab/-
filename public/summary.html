@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>まとめ画像 | デュエマプレイス 配信ツール</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
+<link rel="stylesheet" href="/admin.css">
+<link rel="stylesheet" href="/summary.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>まとめ画像をつくる</h1>
+  <div class="topbar-right">
+    <a class="link" href="/admin">対戦記録画面にもどる</a>
+    <span id="conn" class="conn conn-off">接続中…</span>
+  </div>
+</header>
+
+<main class="sum-layout">
+
+  <section class="card sum-side">
+    <h2>画像の設定</h2>
+
+    <div class="form">
+      <label class="field">
+        <span>どの日の成績にしますか</span>
+        <select id="o-day"></select>
+      </label>
+
+      <label class="field">
+        <span>色</span>
+        <select id="o-theme">
+          <option value="dark">ダーク（黒背景）</option>
+          <option value="light">ライト（白背景）</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>並べ方</span>
+        <select id="o-cols">
+          <option value="auto">自動（多いときは2列）</option>
+          <option value="1">1列</option>
+          <option value="2">2列</option>
+        </select>
+      </label>
+
+      <label class="check"><input type="checkbox" id="o-comment" checked> 試合の感想を入れる</label>
+      <label class="check"><input type="checkbox" id="o-mydeck" checked> 自分のデッキを入れる</label>
+      <label class="check"><input type="checkbox" id="o-h2h"> リスナーとの通算成績を入れる</label>
+
+      <label class="field">
+        <span>タイトル</span>
+        <input type="text" id="o-title" maxlength="40" placeholder="視聴者参加型対戦">
+      </label>
+
+      <label class="field">
+        <span>ひとこと（画像の下に入ります・空欄可）</span>
+        <input type="text" id="o-note" maxlength="60" placeholder="例）参加ありがとうございました！">
+      </label>
+    </div>
+
+    <div class="sum-actions">
+      <button type="button" class="btn btn-primary" id="download">PNG画像として保存</button>
+      <button type="button" class="btn btn-ghost" id="copy">クリップボードにコピー</button>
+    </div>
+    <p class="hint" id="msg">保存した画像は、そのままX（Twitter）に貼り付けられます。</p>
+  </section>
+
+  <section class="card sum-main">
+    <h2>できあがり <span class="count" id="size-label">-</span></h2>
+    <div class="canvas-wrap">
+      <canvas id="cv"></canvas>
+    </div>
+    <p class="hint">この画像がそのまま保存されます。スクショを撮る場合はこの枠を撮ってください。</p>
+  </section>
+
+</main>
+
+<script src="/summary.js"></script>
+</body>
+</html>
