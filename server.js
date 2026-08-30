@@ -41,6 +41,7 @@ app.get('/', (req, res) => res.redirect('/admin'));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
 app.get('/summary', (req, res) => res.sendFile(path.join(__dirname, 'public', 'summary.html')));
 app.get('/overlay', (req, res) => res.sendFile(path.join(__dirname, 'public', 'overlay.html')));
+app.get('/ticker', (req, res) => res.sendFile(path.join(__dirname, 'public', 'ticker.html')));
 
 // ---------------------------------------------------------------
 // WebSocket（画面どうしの即時同期）
@@ -222,6 +223,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  対戦記録画面 : http://localhost:${PORT}/admin`);
   console.log(`  まとめ画像   : http://localhost:${PORT}/summary`);
   console.log(`  OBS表示画面  : http://localhost:${PORT}/overlay`);
+  console.log(`  実況テロップ : http://localhost:${PORT}/ticker`);
   console.log(`  保存ファイル : ${DATA_FILE}`);
   console.log(`  スタンプ置場 : ${STAMP_DIR}`);
   if (store.data.settings.onecomme.enabled) {

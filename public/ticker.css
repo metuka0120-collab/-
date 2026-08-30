@@ -1,0 +1,185 @@
+/* =========================================================
+   実況テロップ（配信画面の下のラインに流す）
+   - 背景は透明。OBSのブラウザソースにそのまま入れる
+   - 既定は幅1920 × 高さ70 くらいを想定
+   ========================================================= */
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  overflow: hidden;
+  height: 100%;
+}
+
+body {
+  font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", system-ui, sans-serif;
+  color: #fff;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bar {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity .4s ease;
+}
+
+/* 本日の対戦がまだ無いときは、まるごと消す */
+.bar.is-empty { opacity: 0; }
+
+/* 帯の下地（?bg=none で消せる） */
+.bar.has-bg::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(10, 13, 24, .88) 0%, rgba(14, 18, 34, .82) 65%, rgba(14, 18, 34, 0) 100%);
+  z-index: 0;
+}
+
+/* ---------- 左の固定部分（本日の成績） ---------- */
+.head {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: calc(9px * var(--scale));
+  padding: 0 calc(20px * var(--scale)) 0 calc(18px * var(--scale));
+  flex: none;
+  background: linear-gradient(90deg, #45b6ff, #a45cff);
+  color: #08111f;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  padding-right: calc(30px * var(--scale));
+}
+.bar.no-head .head { display: none; }
+
+.head-label {
+  font-size: calc(13px * var(--scale));
+  font-weight: 700;
+  letter-spacing: .1em;
+}
+.head-rec {
+  display: flex;
+  align-items: baseline;
+  gap: calc(4px * var(--scale));
+  font-variant-numeric: tabular-nums;
+}
+.head-rec b { font-size: calc(24px * var(--scale)); font-weight: 700; line-height: 1; }
+.head-rec .u { font-size: calc(11px * var(--scale)); font-weight: 700; margin-right: calc(6px * var(--scale)); }
+
+/* ---------- 流れる部分 ---------- */
+.window {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  /* 両端をふわっと消して、切れ目を目立たせない */
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 46px, #000 calc(100% - 110px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 46px, #000 calc(100% - 110px), transparent 100%);
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+/*
+  流れる動きはCSSアニメーションで行う。
+  時間で進むので、フレームが間引かれても速度がぶれない。
+*/
+@keyframes ticker-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-1 * var(--shift, 0px))); }
+}
+
+/* ---------- 1件ぶん ---------- */
+.item {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(10px * var(--scale));
+  padding: 0 calc(26px * var(--scale));
+  flex: none;
+}
+
+.sep {
+  flex: none;
+  width: calc(7px * var(--scale));
+  height: calc(7px * var(--scale));
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .3);
+}
+
+.no {
+  font-size: calc(13px * var(--scale));
+  color: #99a5c2;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.badge {
+  font-size: calc(13px * var(--scale));
+  font-weight: 700;
+  letter-spacing: .04em;
+  padding: calc(2px * var(--scale)) calc(10px * var(--scale));
+  border-radius: calc(5px * var(--scale));
+  flex: none;
+}
+.badge.win  { background: rgba(63, 220, 146, .22); color: #4fe39b; }
+.badge.lose { background: rgba(255, 109, 121, .22); color: #ff8a94; }
+
+.icon {
+  width: calc(30px * var(--scale));
+  height: calc(30px * var(--scale));
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, .2);
+}
+
+.name {
+  font-size: calc(22px * var(--scale));
+  font-weight: 700;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, .65);
+  flex: none;
+}
+
+.deck {
+  font-size: calc(16px * var(--scale));
+  font-weight: 600;
+  color: #8fd7ff;
+  flex: none;
+}
+
+.comment {
+  font-size: calc(18px * var(--scale));
+  color: #e6ecf9;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, .65);
+  flex: none;
+}
+
+.stamps {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(4px * var(--scale));
+  flex: none;
+  font-size: calc(24px * var(--scale));
+  line-height: 1;
+}
+.stamps img {
+  width: calc(26px * var(--scale));
+  height: calc(26px * var(--scale));
+  object-fit: contain;
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .track { animation: none !important; }
+}

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>実況テロップ | デュエマプレイス 配信ツール</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
+<link rel="stylesheet" href="/ticker.css">
+</head>
+<body>
+
+<div id="bar" class="bar is-empty">
+  <!-- 左に固定で出る本日の成績 -->
+  <div class="head" id="head">
+    <span class="head-label">本日</span>
+    <span class="head-rec">
+      <b id="h-win">0</b><span class="u">WIN</span>
+      <b id="h-lose">0</b><span class="u">LOSE</span>
+    </span>
+  </div>
+
+  <!-- 右から左へ流れる部分 -->
+  <div class="window" id="window">
+    <div class="track" id="track"></div>
+  </div>
+</div>
+
+<script src="/ticker.js"></script>
+</body>
+</html>
