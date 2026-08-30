@@ -36,7 +36,8 @@ var ui = {
   editStamps: null, // 履歴編集中のスタンプ
   picked: null,     // わんコメから選んだリスナー { name, icon, listenerId }
   ocOpen: false,    // わんコメの設定欄を開いているか
-  ocDirty: false    // わんコメの設定を入力中か
+  ocDirty: false,   // わんコメの設定を入力中か
+  roomDirty: false  // ルームIDを入力中か
 };
 
 function $(id) { return document.getElementById(id); }
@@ -90,6 +91,15 @@ var RECRUIT_HINT = {
   paused: 'OBSに「対戦者募集ストップ中」と出ます。待機を消化したら「次の対戦者募集中」に戻してください。',
   closed: 'OBSに「募集終了」と出ます。'
 };
+
+function renderRoom() {
+  var roomId = (state.settings && state.settings.roomId) || '';
+  if (!ui.roomDirty) $('room-input').value = roomId;
+
+  $('room-hint').innerHTML = roomId
+    ? '<span class="room-live"><span class="room-dot"></span>OBSに表示中： <b>' + esc(roomId) + '</b></span>'
+    : 'ルームIDを入れて「反映」を押すと、OBS表示画面に出ます。';
+}
 
 function renderRecruit() {
   var now = (state.settings && state.settings.recruit) || 'open';
@@ -333,6 +343,7 @@ function applyState(next) {
 function render() {
   mountStampPicker($('q-stamps'), ui.quickStamps);
   renderRecruit();
+  renderRoom();
   renderOneComme();
   renderCurrent();
   renderStats();
@@ -703,6 +714,21 @@ Array.prototype.forEach.call(document.querySelectorAll('[data-recruit]'), functi
     if (state.settings && state.settings.recruit === b.dataset.recruit) return;
     api('PUT', '/api/settings', { recruit: b.dataset.recruit });
   });
+});
+
+// ルームID（反映を押した瞬間にOBSへ出る）
+$('room-input').addEventListener('input', function () { ui.roomDirty = true; });
+
+$('room-form').addEventListener('submit', function (e) {
+  e.preventDefault();
+  ui.roomDirty = false;
+  api('PUT', '/api/settings', { roomId: $('room-input').value.trim() });
+});
+
+$('room-clear').addEventListener('click', function () {
+  ui.roomDirty = false;
+  $('room-input').value = '';
+  api('PUT', '/api/settings', { roomId: '' });
 });
 
 // ワンコメ連携

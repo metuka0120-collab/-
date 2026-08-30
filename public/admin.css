@@ -397,3 +397,33 @@ select { cursor: pointer; }
 .rc.on.rc-open   { background: var(--win);  border-color: var(--win);  color: #06281a; }
 .rc.on.rc-paused { background: #ffb020;     border-color: #ffb020;     color: #2e1c00; }
 .rc.on.rc-closed { background: #7b8398;     border-color: #7b8398;     color: #12141b; }
+
+/* ---------- ルームID ---------- */
+.room-form { margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
+.room-row { display: flex; gap: 7px; }
+.room-row input {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+}
+.room-row .btn { flex: none; }
+
+.room-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+}
+.room-live b {
+  color: var(--text);
+  font-size: 14px;
+  letter-spacing: .08em;
+  font-variant-numeric: tabular-nums;
+}
+.room-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--win); flex: none;
+}

@@ -11,6 +11,7 @@
 
 const params = new URLSearchParams(location.search);
 const SHOW_STATS = params.get('stats') !== '0';
+const SHOW_ROOM = params.get('room') !== '0';
 const HIDE_WHEN_IDLE = params.get('idle') === 'hide';
 
 const overlay = document.getElementById('overlay');
@@ -19,6 +20,8 @@ const elDeck = document.getElementById('deck');
 const elMatchNo = document.getElementById('match-no');
 const elTag = document.getElementById('tag');
 const elIcon = document.getElementById('ov-icon');
+const elRoom = document.getElementById('room');
+const elRoomId = document.getElementById('room-id');
 const elRecWin = document.getElementById('rec-win');
 const elRecLose = document.getElementById('rec-lose');
 const elRecRate = document.getElementById('rec-rate');
@@ -51,6 +54,16 @@ const IDLE_TEXT = {
 function render(state) {
   const current = state.current;
   const stats = state.stats || { wins: 0, losses: 0, winRate: 0, total: 0 };
+  const settings = state.settings || {};
+
+  // ルームID（入っているときだけ出す）
+  const roomId = SHOW_ROOM ? String(settings.roomId || '').trim() : '';
+  if (roomId) {
+    elRoomId.textContent = roomId;
+    elRoom.hidden = false;
+  } else {
+    elRoom.hidden = true;
+  }
 
   elRecWin.textContent = stats.wins;
   elRecLose.textContent = stats.losses;
@@ -87,7 +100,6 @@ function render(state) {
   overlay.classList.add('is-idle');
   overlay.classList.remove('is-swap');
 
-  const settings = state.settings || {};
   const status = IDLE_TEXT[settings.recruit] ? settings.recruit : 'open';
   const text = IDLE_TEXT[status];
 

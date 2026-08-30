@@ -126,6 +126,43 @@ body {
   text-overflow: ellipsis;
 }
 
+/* ---------- ルームID ---------- */
+.room {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 5px;
+  padding-top: 5px;
+  border-top: 1px solid rgba(255, 255, 255, .13);
+  white-space: nowrap;
+}
+.room[hidden] { display: none; }
+
+.room-tag {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .14em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .16);
+  color: #dbe4f5;
+  flex: none;
+}
+
+.room-id {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: #ffd873;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .6);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 募集中はルームIDを目立たせる */
+.overlay.is-open .room-tag { background: linear-gradient(90deg, #4fe39b, #21a86a); color: #04261a; }
+
 /* ---------- 本日の成績 ---------- */
 .record {
   display: flex;

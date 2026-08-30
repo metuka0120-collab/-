@@ -32,6 +32,18 @@
         <button type="button" class="rc rc-closed" data-recruit="closed">募集終了</button>
       </div>
       <p class="hint" id="recruit-hint"></p>
+
+      <form class="room-form" id="room-form" autocomplete="off">
+        <label class="field">
+          <span>ルームID<em>（OBS表示画面に出ます・空にすると消えます）</em></span>
+          <div class="room-row">
+            <input type="text" id="room-input" maxlength="24" placeholder="例）1234-5678">
+            <button type="submit" class="btn btn-primary btn-sm">反映</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="room-clear">消す</button>
+          </div>
+        </label>
+        <p class="hint" id="room-hint"></p>
+      </form>
     </section>
 
     <section class="card" id="record-card">
