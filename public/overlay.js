@@ -17,6 +17,7 @@ const overlay = document.getElementById('overlay');
 const elName = document.getElementById('name');
 const elDeck = document.getElementById('deck');
 const elMatchNo = document.getElementById('match-no');
+const elTag = document.getElementById('tag');
 const elIcon = document.getElementById('ov-icon');
 const elRecWin = document.getElementById('rec-win');
 const elRecLose = document.getElementById('rec-lose');
@@ -25,6 +26,27 @@ const elRecRate = document.getElementById('rec-rate');
 if (!SHOW_STATS) overlay.classList.add('no-record');
 
 let lastCurrentId = null;
+
+/**
+ * 対戦していないときの表示。管理画面の「募集ステータス」で切り替わる。
+ */
+const IDLE_TEXT = {
+  open: {
+    tag: '募集中',
+    name: '次の対戦者募集中',
+    sub: 'コメントで参加受付中！'
+  },
+  paused: {
+    tag: 'ストップ中',
+    name: '対戦者募集ストップ中',
+    sub: '待機消化後に再募集します'
+  },
+  closed: {
+    tag: '受付終了',
+    name: '募集終了',
+    sub: 'ご参加ありがとうございました！'
+  }
+};
 
 function render(state) {
   const current = state.current;
@@ -43,7 +65,8 @@ function render(state) {
     }
     lastCurrentId = current.id;
 
-    overlay.classList.remove('is-idle', 'is-hidden');
+    overlay.classList.remove('is-idle', 'is-open', 'is-paused', 'is-closed', 'is-hidden');
+    elTag.textContent = '対戦中';
     if (current.icon) {
       if (elIcon.getAttribute('src') !== current.icon) elIcon.src = current.icon;
       elIcon.hidden = false;
@@ -63,8 +86,17 @@ function render(state) {
   elIcon.removeAttribute('src');
   overlay.classList.add('is-idle');
   overlay.classList.remove('is-swap');
-  elName.textContent = '次の対戦者募集中';
-  elDeck.textContent = 'コメントで参加受付中！';
+
+  const settings = state.settings || {};
+  const status = IDLE_TEXT[settings.recruit] ? settings.recruit : 'open';
+  const text = IDLE_TEXT[status];
+
+  overlay.classList.remove('is-open', 'is-paused', 'is-closed');
+  overlay.classList.add('is-' + status);
+
+  elTag.textContent = text.tag;
+  elName.textContent = text.name;
+  elDeck.textContent = text.sub;
   elMatchNo.textContent = `本日 ${stats.total} 戦終了`;
 
   if (HIDE_WHEN_IDLE) {

@@ -259,7 +259,7 @@ function draw() {
     var h2hText = '';
     if (opts.h2h) {
       var rec = h2hOf(r.name);
-      if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L'; lines++; }
+      if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE'; lines++; }
     }
     return { r: r, comment: comment, h2hText: h2hText, h: sz.rowPad * 2 + lines * sz.lineGap };
   });
@@ -401,7 +401,7 @@ function draw() {
       ctx.textAlign = 'left';
 
       // スタンプは行の右端に置く。名前はその手前までに収める
-      var stampSize = Math.round(sz.name * 1.05);
+      var stampSize = Math.round(sz.name * 1.28);
       var stampW = opts.stamps ? drawStamps(ctx, r.stamps, innerX + innerW, lineY - sz.name * 0.32, stampSize) : 0;
 
       var nameX = badgeX + badgeW + 14;

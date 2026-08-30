@@ -23,6 +23,16 @@
   <!-- 左：入力 -->
   <div class="col col-input">
 
+    <section class="card">
+      <h2>募集ステータス<span class="count">OBS表示</span></h2>
+      <div class="recruit" id="recruit" role="group" aria-label="募集ステータス">
+        <button type="button" class="rc rc-open"   data-recruit="open">次の対戦者募集中</button>
+        <button type="button" class="rc rc-paused" data-recruit="paused">募集ストップ中</button>
+        <button type="button" class="rc rc-closed" data-recruit="closed">募集終了</button>
+      </div>
+      <p class="hint" id="recruit-hint"></p>
+    </section>
+
     <section class="card" id="record-card">
       <h2>対戦を記録する</h2>
 

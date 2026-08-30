@@ -144,10 +144,26 @@ body {
 .rec-lose b { color: #ff7b86; }
 .rec-rate b { color: #7dc4ff; }
 
-/* 待機中の表示 */
-.overlay.is-idle .name { color: #c9d3ea; }
+/* ---------- 対戦していないときの表示 ---------- */
+.overlay.is-idle .name { color: #dbe3f3; }
 .overlay.is-idle .accent { background: linear-gradient(180deg, #6b7396, #4a5170); }
 .overlay.is-idle .tag { background: #4a5170; color: #e6ebf7; }
+
+/* 募集中：緑。参加できることが一目で分かるように */
+.overlay.is-open .accent { background: linear-gradient(180deg, #4fe39b, #21a86a); }
+.overlay.is-open .tag { background: linear-gradient(90deg, #4fe39b, #21a86a); color: #04261a; }
+.overlay.is-open .deck { color: #7fe6b4; }
+
+/* ストップ中：黄。今は受け付けていないことが分かるように */
+.overlay.is-paused .accent { background: linear-gradient(180deg, #ffc861, #e08c14); }
+.overlay.is-paused .tag { background: linear-gradient(90deg, #ffc861, #e08c14); color: #2e1c00; }
+.overlay.is-paused .deck { color: #ffd48a; }
+
+/* 募集終了：グレー */
+.overlay.is-closed .accent { background: linear-gradient(180deg, #8b93a8, #5a6178); }
+.overlay.is-closed .tag { background: #7b8398; color: #12141b; }
+.overlay.is-closed .name { color: #b9c1d4; }
+.overlay.is-closed .deck { color: #96a0b8; }
 
 /* 成績を隠す（?stats=0） */
 .overlay.no-record .record { display: none; }

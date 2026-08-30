@@ -81,6 +81,26 @@ function h2h(name) {
 
 
 
+
+// ---------------------------------------------------------
+// 募集ステータス（OBS表示画面に出る）
+// ---------------------------------------------------------
+var RECRUIT_HINT = {
+  open:   'OBSに「次の対戦者募集中」と出ます。',
+  paused: 'OBSに「対戦者募集ストップ中」と出ます。待機を消化したら「次の対戦者募集中」に戻してください。',
+  closed: 'OBSに「募集終了」と出ます。'
+};
+
+function renderRecruit() {
+  var now = (state.settings && state.settings.recruit) || 'open';
+  Array.prototype.forEach.call(document.querySelectorAll('[data-recruit]'), function (b) {
+    var on = b.dataset.recruit === now;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  $('recruit-hint').textContent = RECRUIT_HINT[now] || '';
+}
+
 // ---------------------------------------------------------
 // アイコン
 // ---------------------------------------------------------
@@ -312,6 +332,7 @@ function applyState(next) {
 // ---------------------------------------------------------
 function render() {
   mountStampPicker($('q-stamps'), ui.quickStamps);
+  renderRecruit();
   renderOneComme();
   renderCurrent();
   renderStats();
@@ -362,7 +383,7 @@ function renderCurrent() {
             (c.myDeck ? ' <span class="vs">VS</span> 自分: ' + esc(c.myDeck) : '') + '</div>' +
         '</div>' +
       '</div>' +
-      (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L</div>' : '') +
+      (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE</div>' : '') +
     '</div>' +
     '<div class="form" style="margin-top:12px">' +
       '<div class="results">' +
@@ -402,7 +423,7 @@ function renderStats() {
   $('s-total').textContent = s.total || 0;
   $('s-rate').textContent = (s.winRate || 0) + '%';
   $('s-date').textContent = '集計日：' + jpDate(s.date) + '（日付が変わると自動で 0 に戻ります）';
-  $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + 'W ' + (t.losses || 0) + 'L　勝率 ' + (t.winRate || 0) + '%';
+  $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + 'WIN ' + (t.losses || 0) + 'LOSE　勝率 ' + (t.winRate || 0) + '%';
   $('t-days').textContent = t.days ? '（' + t.days + '日ぶん）' : '';
 }
 
@@ -478,7 +499,7 @@ function renderHistory() {
     var wins = list.filter(function (h) { return h.result === 'win'; }).length;
     var losses = list.length - wins;
     return '<div class="day-head"><b>' + jpDate(day) + '</b>' +
-      '<span class="day-rec">' + list.length + '戦 ' + wins + 'W ' + losses + 'L</span></div>' +
+      '<span class="day-rec">' + list.length + '戦 ' + wins + 'WIN ' + losses + 'LOSE</span></div>' +
       list.map(matchCard).join('');
   }).join('') +
   (hidden ? '<div class="empty">新しい方から ' + MAX_RENDER + '件を表示しています（ほか ' + hidden +
@@ -509,7 +530,7 @@ function matchCard(h) {
     '</div>' +
     stampsView(h.stamps) +
     (h.comment ? '<div class="m-comment">' + esc(h.comment) + '</div>' : '') +
-    (rec.total > 1 ? '<div class="m-h2h">このリスナーとは通算 <b>' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L</b></div>' : '') +
+    (rec.total > 1 ? '<div class="m-h2h">このリスナーとは通算 <b>' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE</b></div>' : '') +
   '</div>';
 }
 
@@ -586,7 +607,7 @@ function rankRow(label, sub, rec, icon) {
   return '<div class="rank-row">' +
     (icon !== undefined ? avatar(icon, label, 'avatar-sm') : '') +
     '<span class="rank-name">' + esc(label) + (sub ? '<span class="rank-sub">' + esc(sub) + '</span>' : '') + '</span>' +
-    '<span class="rank-rec"><span class="w">' + rec.wins + '</span>W <span class="l">' + rec.losses + '</span>L</span>' +
+    '<span class="rank-rec"><span class="w">' + rec.wins + '</span>WIN <span class="l">' + rec.losses + '</span>LOSE</span>' +
     '<span class="rank-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
     '<span class="rank-rate">' + rec.winRate + '%</span>' +
   '</div>';
@@ -673,6 +694,14 @@ $('settings-form').addEventListener('submit', function (e) {
     streamTitle: $('set-title').value.trim(),
     myName: $('set-myname').value.trim(),
     myDeck: $('set-mydeck').value.trim()
+  });
+});
+
+// 募集ステータス（押した瞬間にOBSへ反映される）
+Array.prototype.forEach.call(document.querySelectorAll('[data-recruit]'), function (b) {
+  b.addEventListener('click', function () {
+    if (state.settings && state.settings.recruit === b.dataset.recruit) return;
+    api('PUT', '/api/settings', { recruit: b.dataset.recruit });
   });
 });
 
