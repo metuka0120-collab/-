@@ -35,7 +35,7 @@ var THEMES = {
 
 var opts = {
   day: 'today', theme: 'dark', cols: 'auto',
-  comment: true, myDeck: true, h2h: false, stamps: true, title: '', note: ''
+  comment: true, myDeck: true, h2h: false, stamps: true, icons: true, title: '', note: ''
 };
 
 function $(id) { return document.getElementById(id); }
@@ -168,6 +168,17 @@ function stampImage(url) {
   img.onerror = function () { imageCache[url] = false; }; // 消えた画像は諦める
   img.src = url;
   return null;
+}
+
+/** 丸く切り抜いて画像を描く */
+function drawCircleImage(ctx, img, x, y, size) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  ctx.drawImage(img, x, y, size, size);
+  ctx.restore();
 }
 
 function findStamp(id) {
@@ -394,6 +405,17 @@ function draw() {
       var stampW = opts.stamps ? drawStamps(ctx, r.stamps, innerX + innerW, lineY - sz.name * 0.32, stampSize) : 0;
 
       var nameX = badgeX + badgeW + 14;
+
+      // リスナーのアイコン（わんコメから取り込んだ場合）
+      if (opts.icons && r.icon) {
+        var iconSize = Math.round(sz.name * 1.15);
+        var iconImg = stampImage(r.icon);
+        if (iconImg) {
+          drawCircleImage(ctx, iconImg, nameX, lineY - iconSize * 0.78, iconSize);
+        }
+        nameX += iconSize + 10;
+      }
+
       setFont(ctx, sz.name, 'bold');
       ctx.fillStyle = t.text;
       ctx.fillText(fit(ctx, r.name, innerX + innerW - nameX - stampW - (stampW ? 12 : 0)), nameX, lineY + 2);
@@ -506,6 +528,7 @@ $('o-comment').addEventListener('change', function (e) { opts.comment = e.target
 $('o-mydeck').addEventListener('change', function (e) { opts.myDeck = e.target.checked; draw(); });
 $('o-h2h').addEventListener('change', function (e) { opts.h2h = e.target.checked; draw(); });
 $('o-stamps').addEventListener('change', function (e) { opts.stamps = e.target.checked; draw(); });
+$('o-icons').addEventListener('change', function (e) { opts.icons = e.target.checked; draw(); });
 $('o-title').addEventListener('input', function (e) { opts.title = e.target.value; draw(); });
 $('o-note').addEventListener('input', function (e) { opts.note = e.target.value; draw(); });
 

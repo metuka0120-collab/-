@@ -70,6 +70,35 @@
       </div>
     </section>
 
+    <section class="card" id="oc-card">
+      <h2>
+        ワンコメから取り込む
+        <span class="oc-state" id="oc-state">オフ</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="oc-toggle" style="margin-left:auto">設定</button>
+      </h2>
+
+      <div id="oc-settings" hidden>
+        <div class="form">
+          <label class="check">
+            <input type="checkbox" id="oc-enabled">
+            <span>わんコメと連携する</span>
+          </label>
+          <label class="field">
+            <span>接続先<em>（ふつうは変更不要）</em></span>
+            <input type="text" id="oc-url" maxlength="120" placeholder="ws://127.0.0.1:11180/sub">
+          </label>
+          <div class="two">
+            <button type="button" class="btn btn-primary btn-sm" id="oc-save">保存して接続</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="oc-clear">一覧を消す</button>
+          </div>
+          <p class="hint" id="oc-hint"></p>
+        </div>
+      </div>
+
+      <div id="oc-picked" hidden></div>
+      <div id="oc-list"></div>
+    </section>
+
     <section class="card">
       <h2>本日の成績</h2>
       <div class="stats">

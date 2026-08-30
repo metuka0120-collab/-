@@ -8,3 +8,4 @@ Thumbs.db
 !data/.gitkeep
 stamps/*
 !stamps/README.txt
+data/icons/

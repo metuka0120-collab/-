@@ -17,6 +17,7 @@ const overlay = document.getElementById('overlay');
 const elName = document.getElementById('name');
 const elDeck = document.getElementById('deck');
 const elMatchNo = document.getElementById('match-no');
+const elIcon = document.getElementById('ov-icon');
 const elRecWin = document.getElementById('rec-win');
 const elRecLose = document.getElementById('rec-lose');
 const elRecRate = document.getElementById('rec-rate');
@@ -43,6 +44,13 @@ function render(state) {
     lastCurrentId = current.id;
 
     overlay.classList.remove('is-idle', 'is-hidden');
+    if (current.icon) {
+      if (elIcon.getAttribute('src') !== current.icon) elIcon.src = current.icon;
+      elIcon.hidden = false;
+    } else {
+      elIcon.hidden = true;
+      elIcon.removeAttribute('src');
+    }
     elName.textContent = current.name || '名前未設定';
     elDeck.textContent = current.deck || 'デッキ未登録';
     elMatchNo.textContent = `本日 ${current.matchNumber} 戦目`;
@@ -51,6 +59,8 @@ function render(state) {
 
   // 対戦者がいないとき
   lastCurrentId = null;
+  elIcon.hidden = true;
+  elIcon.removeAttribute('src');
   overlay.classList.add('is-idle');
   overlay.classList.remove('is-swap');
   elName.textContent = '次の対戦者募集中';

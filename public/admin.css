@@ -302,3 +302,73 @@ select { cursor: pointer; }
   border-radius: 8px;
 }
 .stamp-view img { width: 26px; height: 26px; object-fit: contain; display: block; }
+
+/* ---------- ワンコメ連携 ---------- */
+.oc-state {
+  font-size: 11px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  letter-spacing: 0;
+  background: var(--panel-2);
+  color: var(--dim);
+  border: 1px solid var(--line);
+}
+.oc-state.on   { background: rgba(53,208,127,.16); color: var(--win); border-color: transparent; }
+.oc-state.err  { background: rgba(255,95,109,.16); color: var(--lose); border-color: transparent; }
+.oc-state.wait { background: rgba(255,176,32,.16); color: var(--warn, #ffb020); border-color: transparent; }
+
+#oc-settings { margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line-soft); }
+
+.oc-list { display: flex; flex-direction: column; gap: 5px; max-height: 290px; overflow-y: auto; }
+
+.oc-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  border-radius: 9px;
+  padding: 6px 9px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  color: var(--text);
+}
+.oc-row:hover { border-color: var(--accent); background: var(--panel-3); }
+.oc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.oc-name { font-size: 13.5px; font-weight: 700; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-comment { font-size: 11px; color: var(--dim); display: block; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oc-take { font-size: 11px; color: var(--accent); flex: none; }
+
+/* アイコン */
+.avatar {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--panel-3);
+  border: 1px solid var(--line);
+}
+.avatar-lg { width: 44px; height: 44px; }
+.avatar-sm { width: 24px; height: 24px; }
+.avatar-fallback {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; color: var(--dim);
+}
+
+/* 選んだリスナー */
+.picked {
+  display: flex; align-items: center; gap: 9px;
+  background: rgba(63,167,255,.10);
+  border: 1px solid rgba(63,167,255,.35);
+  border-radius: 9px;
+  padding: 7px 10px;
+  margin-bottom: 10px;
+}
+.picked-name { flex: 1; min-width: 0; font-weight: 700; font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picked-label { font-size: 10.5px; color: var(--accent); display: block; font-weight: 400; }
+
+/* 現在の対戦・履歴の頭のアイコン */
+.cur-head { display: flex; align-items: center; gap: 11px; }
+.cur-head .cur-body { min-width: 0; flex: 1; }

@@ -14,7 +14,9 @@ var state = {
   totalStats: { wins: 0, losses: 0, total: 0, winRate: 0, days: 0 },
   opponents: [],
   myDecks: [],
-  stamps: []
+  stamps: [],
+  onecomme: { enabled: false, url: '', connected: false, lastError: '', count: 0 },
+  commenters: []
 };
 
 /** 入力途中の内容が再描画で消えないように保持する */
@@ -31,7 +33,10 @@ var ui = {
   settingsDirty: false,
   liveStamps: [],   // 対戦中モードで選んだスタンプ
   quickStamps: [],  // あとから記録モードで選んだスタンプ
-  editStamps: null  // 履歴編集中のスタンプ
+  editStamps: null, // 履歴編集中のスタンプ
+  picked: null,     // わんコメから選んだリスナー { name, icon, listenerId }
+  ocOpen: false,    // わんコメの設定欄を開いているか
+  ocDirty: false    // わんコメの設定を入力中か
 };
 
 function $(id) { return document.getElementById(id); }
@@ -74,6 +79,114 @@ function h2h(name) {
   return { wins: wins, losses: losses, total: wins + losses };
 }
 
+
+
+// ---------------------------------------------------------
+// アイコン
+// ---------------------------------------------------------
+
+/** アイコン画像。無いときは名前の1文字を出す */
+function avatar(icon, name, extraClass) {
+  var cls = 'avatar' + (extraClass ? ' ' + extraClass : '');
+  if (icon) return '<img class="' + cls + '" src="' + esc(icon) + '" alt="">';
+  var initial = String(name || '?').trim().charAt(0) || '?';
+  return '<span class="' + cls + ' avatar-fallback">' + esc(initial) + '</span>';
+}
+
+// ---------------------------------------------------------
+// ワンコメ連携
+// ---------------------------------------------------------
+
+function renderOneComme() {
+  var oc = state.onecomme || {};
+  var badge = $('oc-state');
+
+  if (!oc.enabled) {
+    badge.textContent = 'オフ';
+    badge.className = 'oc-state';
+  } else if (oc.connected) {
+    badge.textContent = '● 接続中';
+    badge.className = 'oc-state on';
+  } else {
+    badge.textContent = '× つながっていません';
+    badge.className = 'oc-state err';
+  }
+
+  $('oc-settings').hidden = !ui.ocOpen;
+  if (!ui.ocDirty) {
+    $('oc-enabled').checked = !!oc.enabled;
+    $('oc-url').value = oc.url || '';
+  }
+
+  $('oc-hint').textContent = !oc.enabled
+    ? 'わんコメを起動した状態で「わんコメと連携する」をONにしてください。'
+    : (oc.connected
+        ? 'つながっています。わんコメにコメントが来ると、下に出ます。'
+        : 'つながりません。わんコメが起動しているか、接続先が合っているか確認してください。'
+          + (oc.lastError ? '（' + oc.lastError + '）' : ''));
+
+  // 選択中のリスナー
+  var pickedBox = $('oc-picked');
+  if (ui.picked) {
+    pickedBox.hidden = false;
+    pickedBox.innerHTML =
+      '<div class="picked">' +
+        avatar(ui.picked.icon, ui.picked.name) +
+        '<span class="picked-name"><span class="picked-label">取り込み中のリスナー</span>' + esc(ui.picked.name) + '</span>' +
+        '<button type="button" class="btn btn-ghost btn-sm" id="picked-clear">やめる</button>' +
+      '</div>';
+    $('picked-clear').addEventListener('click', function () {
+      ui.picked = null;
+      renderOneComme();
+    });
+  } else {
+    pickedBox.hidden = true;
+    pickedBox.innerHTML = '';
+  }
+
+  // コメントした人の一覧
+  var list = state.commenters || [];
+  var box = $('oc-list');
+
+  if (!oc.enabled) {
+    box.innerHTML = '<div class="empty">連携をONにすると、コメントした人がここに出ます。<br>名前とアイコンをそのまま取り込めます。</div>';
+    return;
+  }
+  if (!list.length) {
+    box.innerHTML = '<div class="empty">' +
+      (oc.connected ? 'コメントを待っています…' : 'わんコメに接続できていません。') + '</div>';
+    return;
+  }
+
+  box.innerHTML = '<div class="oc-list">' + list.map(function (person, i) {
+    return '<button type="button" class="oc-row" data-i="' + i + '">' +
+      avatar(person.profileImage, person.name) +
+      '<span class="oc-name">' + esc(person.name) +
+        (person.comment ? '<span class="oc-comment">' + esc(person.comment) + '</span>' : '') +
+      '</span>' +
+      '<span class="oc-take">取り込む</span>' +
+    '</button>';
+  }).join('') + '</div>';
+
+  Array.prototype.forEach.call(box.querySelectorAll('.oc-row'), function (row) {
+    row.addEventListener('click', function () {
+      var person = (state.commenters || [])[Number(row.dataset.i)];
+      if (!person) return;
+      ui.picked = { name: person.name, icon: person.profileImage, listenerId: person.userId };
+      // 見えている入力欄に名前を入れる
+      if ($('st-name')) $('st-name').value = person.name;
+      if ($('q-name')) $('q-name').value = person.name;
+      renderOneComme();
+    });
+  });
+}
+
+/** 記録するときに、取り込んだアイコンを一緒に送る */
+function pickedFor(name) {
+  if (!ui.picked) return {};
+  if (normName(ui.picked.name) !== normName(name)) return {};
+  return { icon: ui.picked.icon, listenerId: ui.picked.listenerId };
+}
 
 // ---------------------------------------------------------
 // スタンプ
@@ -199,6 +312,7 @@ function applyState(next) {
 // ---------------------------------------------------------
 function render() {
   mountStampPicker($('q-stamps'), ui.quickStamps);
+  renderOneComme();
   renderCurrent();
   renderStats();
   renderSettings();
@@ -229,7 +343,9 @@ function renderCurrent() {
       e.preventDefault();
       var name = $('st-name').value.trim();
       if (!name) { window.alert('リスナー名を入力してください。'); return; }
-      api('POST', '/api/match/start', { name: name, deck: $('st-deck').value.trim() });
+      api('POST', '/api/match/start', Object.assign(
+        { name: name, deck: $('st-deck').value.trim() }, pickedFor(name)
+      )).then(function () { ui.picked = null; renderOneComme(); });
     });
     return;
   }
@@ -237,10 +353,15 @@ function renderCurrent() {
   var rec = h2h(c.name);
   box.innerHTML =
     '<div class="cur-box">' +
-      '<div class="cur-no">本日 ' + c.matchNumber + ' 戦目 ／ 開始 ' + hhmm(c.startedAt) + '</div>' +
-      '<div class="cur-name">' + esc(c.name) + '</div>' +
-      '<div class="cur-deck">' + (c.deck ? esc(c.deck) : 'デッキ未入力') +
-        (c.myDeck ? ' <span class="vs">VS</span> 自分: ' + esc(c.myDeck) : '') + '</div>' +
+      '<div class="cur-head">' +
+        avatar(c.icon, c.name, 'avatar-lg') +
+        '<div class="cur-body">' +
+          '<div class="cur-no">本日 ' + c.matchNumber + ' 戦目 ／ 開始 ' + hhmm(c.startedAt) + '</div>' +
+          '<div class="cur-name">' + esc(c.name) + '</div>' +
+          '<div class="cur-deck">' + (c.deck ? esc(c.deck) : 'デッキ未入力') +
+            (c.myDeck ? ' <span class="vs">VS</span> 自分: ' + esc(c.myDeck) : '') + '</div>' +
+        '</div>' +
+      '</div>' +
       (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L</div>' : '') +
     '</div>' +
     '<div class="form" style="margin-top:12px">' +
@@ -374,6 +495,7 @@ function matchCard(h) {
     '<div class="m-top">' +
       '<span class="m-no">' + (h.matchNumber || '-') + '戦目</span>' +
       '<span class="m-badge ' + h.result + '">' + (h.result === 'win' ? 'WIN' : 'LOSE') + '</span>' +
+      avatar(h.icon, h.name, 'avatar-sm') +
       '<span class="m-name">' + esc(h.name) + '</span>' +
       '<span class="m-time">' + hhmm(h.finishedAt) + '</span>' +
       '<span class="m-acts">' +
@@ -459,9 +581,10 @@ function bindHistory() {
 }
 
 // --- ランキング ---
-function rankRow(label, sub, rec) {
+function rankRow(label, sub, rec, icon) {
   var pct = rec.total ? (rec.wins / rec.total) * 100 : 0;
   return '<div class="rank-row">' +
+    (icon !== undefined ? avatar(icon, label, 'avatar-sm') : '') +
     '<span class="rank-name">' + esc(label) + (sub ? '<span class="rank-sub">' + esc(sub) + '</span>' : '') + '</span>' +
     '<span class="rank-rec"><span class="w">' + rec.wins + '</span>W <span class="l">' + rec.losses + '</span>L</span>' +
     '<span class="rank-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
@@ -474,7 +597,7 @@ function renderRankings() {
   $('o-count').textContent = opponents.length;
   $('opponents-area').innerHTML = opponents.length
     ? '<div class="rank">' + opponents.slice(0, 50).map(function (o) {
-        return rankRow(o.name, o.decks.join(' / '), o);
+        return rankRow(o.name, o.decks.join(' / '), o, o.icon || '');
       }).join('') + '</div>'
     : '<div class="empty">対戦を記録すると、リスナーごとの通算成績が出ます。</div>';
 
@@ -519,14 +642,16 @@ $('quick-form').addEventListener('submit', function (e) {
   if (!name) { window.alert('リスナー名を入力してください。'); return; }
   if (!ui.quickResult) { window.alert('「WIN」か「LOSE」を選んでください。'); return; }
 
-  api('POST', '/api/history', {
+  api('POST', '/api/history', Object.assign({
     name: name,
     deck: $('q-deck').value.trim(),
     myDeck: $('q-mydeck').value.trim(),
     result: ui.quickResult,
     comment: $('q-comment').value,
     stamps: ui.quickStamps
-  }).then(function () {
+  }, pickedFor(name))).then(function () {
+    ui.picked = null;
+    renderOneComme();
     $('q-name').value = ''; $('q-deck').value = ''; $('q-comment').value = '';
     ui.quickResult = null;
     ui.quickStamps = [];
@@ -549,6 +674,28 @@ $('settings-form').addEventListener('submit', function (e) {
     myName: $('set-myname').value.trim(),
     myDeck: $('set-mydeck').value.trim()
   });
+});
+
+// ワンコメ連携
+$('oc-toggle').addEventListener('click', function () {
+  ui.ocOpen = !ui.ocOpen;
+  renderOneComme();
+});
+
+['oc-enabled', 'oc-url'].forEach(function (id) {
+  $(id).addEventListener('input', function () { ui.ocDirty = true; });
+  $(id).addEventListener('change', function () { ui.ocDirty = true; });
+});
+
+$('oc-save').addEventListener('click', function () {
+  ui.ocDirty = false;
+  api('PUT', '/api/settings', {
+    onecomme: { enabled: $('oc-enabled').checked, url: $('oc-url').value.trim() }
+  });
+});
+
+$('oc-clear').addEventListener('click', function () {
+  api('POST', '/api/onecomme/clear');
 });
 
 // 絞り込み

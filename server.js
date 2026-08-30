@@ -17,6 +17,8 @@ const express = require('express');
 const { WebSocketServer } = require('ws');
 const { Store, DATA_FILE } = require('./lib/store');
 const { listStamps, STAMP_DIR } = require('./lib/stamps');
+const { OneCommeClient } = require('./lib/onecomme');
+const { cacheIcon, ICON_DIR } = require('./lib/icons');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -29,6 +31,8 @@ app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 // stamps/ に置いた画像をそのまま配る
 app.use('/stamps', express.static(STAMP_DIR, { index: false, dotfiles: 'ignore' }));
+// わんコメから取り込んで保存したアイコンを配る
+app.use('/icons', express.static(ICON_DIR, { index: false, dotfiles: 'ignore' }));
 
 // ---------------------------------------------------------------
 // 画面
@@ -44,8 +48,30 @@ app.get('/overlay', (req, res) => res.sendFile(path.join(__dirname, 'public', 'o
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+// わんコメ（OneComme）との接続。状態が動いたら画面に流す
+const onecomme = new OneCommeClient(function () { broadcast(); });
+onecomme.configure(store.data.settings.onecomme);
+
 function snapshot() {
-  return Object.assign(store.snapshot(), { stamps: listStamps() });
+  return Object.assign(store.snapshot(), {
+    stamps: listStamps(),
+    onecomme: onecomme.status(),
+    commenters: onecomme.commenters()
+  });
+}
+
+/**
+ * リスナーのアイコンを自分のPCに保存して、記録に貼り直す。
+ * ダウンロードに時間がかかるので、記録の保存を待たせずに後から差し替える。
+ */
+function attachIcon(record, sourceUrl) {
+  if (!record || !sourceUrl) return;
+  cacheIcon(sourceUrl).then(function (localPath) {
+    if (!localPath) return;
+    record.icon = localPath;
+    store.save();
+    broadcast();
+  });
 }
 
 function broadcast() {
@@ -101,13 +127,27 @@ app.post('/api/stamps/reload', (req, res) => {
 // 配信タイトルや自分の使用デッキ
 app.put('/api/settings', (req, res) => {
   const settings = store.updateSettings(req.body || {});
+  onecomme.configure(settings.onecomme);
   commit(res, { settings });
+});
+
+// わんコメに繋ぎ直す
+app.post('/api/onecomme/reconnect', (req, res) => {
+  onecomme.restart();
+  commit(res, { onecomme: onecomme.status() });
+});
+
+// 取り込んだコメント者の一覧を消す
+app.post('/api/onecomme/clear', (req, res) => {
+  onecomme.clear();
+  commit(res, { onecomme: onecomme.status() });
 });
 
 // 対戦開始（OBSオーバーレイに出す）
 app.post('/api/match/start', (req, res) => {
   const current = store.startMatch(req.body || {});
   if (!current) return badRequest(res, 'リスナー名を入力してください。');
+  attachIcon(current, req.body.icon);
   commit(res, { current }, 201);
 });
 
@@ -141,6 +181,7 @@ app.post('/api/history', (req, res) => {
   if (body.result !== 'win' && body.result !== 'lose') return badRequest(res, '勝ち / 負け を選んでください。');
   const record = store.addHistory(body);
   if (!record) return badRequest(res, 'リスナー名を入力してください。');
+  attachIcon(record, body.icon);
   commit(res, { record }, 201);
 });
 
@@ -183,6 +224,9 @@ server.listen(PORT, HOST, () => {
   console.log(`  OBS表示画面  : http://localhost:${PORT}/overlay`);
   console.log(`  保存ファイル : ${DATA_FILE}`);
   console.log(`  スタンプ置場 : ${STAMP_DIR}`);
+  if (store.data.settings.onecomme.enabled) {
+    console.log(`  わんコメ連携 : ${store.data.settings.onecomme.url}`);
+  }
   console.log('');
   console.log('  終了するには この画面で Ctrl + C を押してください。');
   console.log('');
@@ -202,6 +246,7 @@ server.on('error', (err) => {
 function shutdown() {
   console.log('\n終了します。データを保存しています…');
   clearInterval(heartbeat);
+  onecomme.stop();
   try { store.saveSync(); } catch (err) { console.error('保存に失敗しました:', err.message); }
   for (const socket of wss.clients) socket.terminate();
   server.close(() => process.exit(0));
