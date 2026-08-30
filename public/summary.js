@@ -188,18 +188,19 @@ function findStamp(id) {
   return null;
 }
 
-/** 1試合ぶんのスタンプを右端から順に描く。描いた幅を返す */
-function drawStamps(ctx, ids, rightX, centerY, size) {
-  if (!ids || !ids.length) return 0;
-  var gap = 6;
-  var x = rightX;
-  var drawn = 0;
+/** 実際に描けるスタンプだけに絞る（画像を消した場合などを除く） */
+function usableStamps(ids) {
+  if (!Array.isArray(ids)) return [];
+  return ids.filter(function (id) { return !!findStamp(id); });
+}
 
-  for (var i = ids.length - 1; i >= 0; i--) {
+/** スタンプを左から順に、指定の大きさで描く */
+function drawStamps(ctx, ids, leftX, centerY, size, gap) {
+  var x = leftX;
+  for (var i = 0; i < ids.length; i++) {
     var stamp = findStamp(ids[i]);
     if (!stamp) continue;
 
-    x -= size;
     if (stamp.type === 'emoji') {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -211,10 +212,8 @@ function drawStamps(ctx, ids, rightX, centerY, size) {
       var img = stampImage(stamp.url);
       if (img) ctx.drawImage(img, x, centerY - size / 2, size, size);
     }
-    x -= gap;
-    drawn += size + gap;
+    x += size + gap;
   }
-  return drawn;
 }
 
 // ---------------------------------------------------------
@@ -248,8 +247,9 @@ function draw() {
   var colW = twoCol ? (WIDTH - pad * 2 - gap) / 2 : WIDTH - pad * 2;
 
   var sz = twoCol
-    ? { name: 24, deck: 18, comment: 18, badge: 17, no: 16, rowPad: 12, lineGap: 24 }
-    : { name: 28, deck: 21, comment: 20, badge: 19, no: 17, rowPad: 14, lineGap: 28 };
+    ? { name: 24, deck: 18, comment: 18, badge: 17, no: 16, rowPad: 12, lineGap: 24, stamp: 42 }
+    : { name: 28, deck: 21, comment: 20, badge: 19, no: 17, rowPad: 14, lineGap: 28, stamp: 56 };
+  var STAMP_GAP = 9;
 
   // 各行の高さ（内容によって変わる）
   var rows = records.map(function (r) {
@@ -261,7 +261,12 @@ function draw() {
       var rec = h2hOf(r.name);
       if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE'; lines++; }
     }
-    return { r: r, comment: comment, h2hText: h2hText, h: sz.rowPad * 2 + lines * sz.lineGap };
+    var stampIds = opts.stamps ? usableStamps(r.stamps) : [];
+    var height = sz.rowPad * 2 + lines * sz.lineGap;
+    // スタンプが行からはみ出さないだけの高さは確保する
+    if (stampIds.length) height = Math.max(height, sz.stamp + 22);
+
+    return { r: r, comment: comment, h2hText: h2hText, stampIds: stampIds, h: height };
   });
 
   var colHeights = [0, 0];
@@ -400,9 +405,16 @@ function draw() {
       ctx.fillText(isWin ? 'WIN' : 'LOSE', badgeX + badgeW / 2, lineY + 1);
       ctx.textAlign = 'left';
 
-      // スタンプは行の右端に置く。名前はその手前までに収める
-      var stampSize = Math.round(sz.name * 1.28);
-      var stampW = opts.stamps ? drawStamps(ctx, r.stamps, innerX + innerW, lineY - sz.name * 0.32, stampSize) : 0;
+      // スタンプは行の右端に、行の高さいっぱいの大きさで置く。
+      // 文字が重ならないよう、すべての行をスタンプの手前までに収める。
+      var stampBlock = row.stampIds.length
+        ? row.stampIds.length * sz.stamp + (row.stampIds.length - 1) * STAMP_GAP
+        : 0;
+      var textW = innerW - (stampBlock ? stampBlock + 18 : 0);
+
+      if (stampBlock) {
+        drawStamps(ctx, row.stampIds, innerX + innerW - stampBlock, y + row.h / 2, sz.stamp, STAMP_GAP);
+      }
 
       var nameX = badgeX + badgeW + 14;
 
@@ -418,7 +430,7 @@ function draw() {
 
       setFont(ctx, sz.name, 'bold');
       ctx.fillStyle = t.text;
-      ctx.fillText(fit(ctx, r.name, innerX + innerW - nameX - stampW - (stampW ? 12 : 0)), nameX, lineY + 2);
+      ctx.fillText(fit(ctx, r.name, innerX + textW - nameX), nameX, lineY + 2);
 
       // 2行目：デッキ
       lineY += sz.lineGap;
@@ -426,7 +438,7 @@ function draw() {
       setFont(ctx, sz.deck, 'bold');
       ctx.fillStyle = t.accent;
       var deckText = r.deck || 'デッキ未入力';
-      var maxDeckW = innerW * (perRowMyDeck && r.myDeck ? 0.5 : 1) - 10;
+      var maxDeckW = textW * (perRowMyDeck && r.myDeck ? 0.5 : 1) - 10;
       var shown = fit(ctx, deckText, maxDeckW);
       ctx.fillText(shown, deckX, lineY);
 
@@ -438,7 +450,7 @@ function draw() {
         ctx.fillText(vs, deckX + usedW, lineY);
         var vsW = ctx.measureText(vs).width;
         ctx.fillStyle = t.muted;
-        ctx.fillText(fit(ctx, r.myDeck, innerW - usedW - vsW), deckX + usedW + vsW, lineY);
+        ctx.fillText(fit(ctx, r.myDeck, textW - usedW - vsW), deckX + usedW + vsW, lineY);
       }
 
       // 3行目：感想
@@ -446,7 +458,7 @@ function draw() {
         lineY += sz.lineGap;
         setFont(ctx, sz.comment, '');
         ctx.fillStyle = t.comment;
-        ctx.fillText(fit(ctx, '「' + row.comment + '」', innerW), innerX, lineY);
+        ctx.fillText(fit(ctx, '「' + row.comment + '」', textW), innerX, lineY);
       }
 
       // 4行目：そのリスナーとの通算
@@ -454,7 +466,7 @@ function draw() {
         lineY += sz.lineGap;
         setFont(ctx, sz.comment - 2, '');
         ctx.fillStyle = t.dim;
-        ctx.fillText(fit(ctx, row.h2hText, innerW), innerX, lineY);
+        ctx.fillText(fit(ctx, row.h2hText, textW), innerX, lineY);
       }
 
       cursorY[col] += row.h + 10;
