@@ -19,6 +19,7 @@ const elName = document.getElementById('name');
 const elDeck = document.getElementById('deck');
 const elMatchNo = document.getElementById('match-no');
 const elTag = document.getElementById('tag');
+const elRecruitTag = document.getElementById('recruit-tag');
 const elIcon = document.getElementById('ov-icon');
 const elRoom = document.getElementById('room');
 const elRoomId = document.getElementById('room-id');
@@ -80,6 +81,12 @@ function render(state) {
 
     overlay.classList.remove('is-idle', 'is-open', 'is-paused', 'is-closed', 'is-hidden');
     elTag.textContent = '対戦中';
+
+    // 対戦中も募集状況が分かるようにする
+    const matchStatus = IDLE_TEXT[settings.recruit] ? settings.recruit : 'open';
+    elRecruitTag.textContent = IDLE_TEXT[matchStatus].tag;
+    elRecruitTag.className = 'tag tag-recruit rc-' + matchStatus;
+    elRecruitTag.hidden = false;
     if (current.icon) {
       if (elIcon.getAttribute('src') !== current.icon) elIcon.src = current.icon;
       elIcon.hidden = false;
@@ -106,6 +113,7 @@ function render(state) {
   overlay.classList.remove('is-open', 'is-paused', 'is-closed');
   overlay.classList.add('is-' + status);
 
+  elRecruitTag.hidden = true;
   elTag.textContent = text.tag;
   elName.textContent = text.name;
   elDeck.textContent = text.sub;
