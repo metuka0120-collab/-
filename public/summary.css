@@ -30,3 +30,11 @@
   overflow: auto;
 }
 #cv { display: block; width: 100%; height: auto; border-radius: 8px; }
+
+/* 大きさのつまみ */
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  margin: 2px 0 0;
+}
+.field b { color: var(--text); font-variant-numeric: tabular-nums; }

@@ -433,7 +433,9 @@ function renderStats() {
   $('s-lose').textContent = s.losses || 0;
   $('s-total').textContent = s.total || 0;
   $('s-rate').textContent = (s.winRate || 0) + '%';
-  $('s-date').textContent = '集計日：' + jpDate(s.date) + '（日付が変わると自動で 0 に戻ります）';
+  var cutoff = (state.settings && state.settings.dayCutoffHour) || 0;
+  $('s-date').textContent = '集計日：' + jpDate(s.date) +
+    (cutoff ? '（深夜 ' + cutoff + ':00 までを同じ日として数えています）' : '（0:00 で次の日に切り替わります）');
   $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + 'WIN ' + (t.losses || 0) + 'LOSE　勝率 ' + (t.winRate || 0) + '%';
   $('t-days').textContent = t.days ? '（' + t.days + '日ぶん）' : '';
 }
@@ -445,6 +447,7 @@ function renderSettings() {
   $('set-title').value = s.streamTitle || '';
   $('set-myname').value = s.myName || '';
   $('set-mydeck').value = s.myDeck || '';
+  $('set-cutoff').value = String(s.dayCutoffHour || 0);
 }
 
 // --- 入力補助（過去に使った名前・デッキ名を候補に出す） ---
@@ -694,7 +697,7 @@ $('quick-form').addEventListener('submit', function (e) {
 });
 
 // 設定
-['set-title', 'set-myname', 'set-mydeck'].forEach(function (id) {
+['set-title', 'set-myname', 'set-mydeck', 'set-cutoff'].forEach(function (id) {
   $(id).addEventListener('input', function () { ui.settingsDirty = true; });
 });
 
@@ -704,7 +707,8 @@ $('settings-form').addEventListener('submit', function (e) {
   api('PUT', '/api/settings', {
     streamTitle: $('set-title').value.trim(),
     myName: $('set-myname').value.trim(),
-    myDeck: $('set-mydeck').value.trim()
+    myDeck: $('set-mydeck').value.trim(),
+    dayCutoffHour: Number($('set-cutoff').value)
   });
 });
 

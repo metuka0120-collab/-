@@ -59,8 +59,35 @@
       </label>
 
       <label class="field">
+        <span>フォント</span>
+        <select id="o-font">
+          <option value="gothic">ゴシック（標準）</option>
+          <option value="ud">UDゴシック（太め・見やすい）</option>
+          <option value="mincho">明朝</option>
+          <option value="kyokasho">教科書体</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>アクセント色</span>
+        <select id="o-accent">
+          <option value="blue">青むらさき（標準）</option>
+          <option value="red">レッド</option>
+          <option value="green">グリーン</option>
+          <option value="pink">ピンク</option>
+          <option value="orange">オレンジ</option>
+          <option value="mono">モノトーン</option>
+        </select>
+      </label>
+
+      <label class="field">
         <span>ひとこと（画像の下に入ります・空欄可）</span>
         <input type="text" id="o-note" maxlength="60" placeholder="例）参加ありがとうございました！">
+      </label>
+
+      <label class="field">
+        <span>ひとことの大きさ <b id="o-note-size-label">22</b> px</span>
+        <input type="range" id="o-note-size" min="14" max="48" step="1" value="22">
       </label>
     </div>
 

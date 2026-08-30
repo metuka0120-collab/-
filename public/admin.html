@@ -24,6 +24,18 @@
   <!-- 左：入力 -->
   <div class="col col-input">
 
+    <section class="card card-room">
+      <h2>ルームID<span class="count">OBS表示</span></h2>
+      <form class="room-form" id="room-form" autocomplete="off">
+        <div class="room-row">
+          <input type="text" id="room-input" maxlength="24" placeholder="例）1234-5678">
+          <button type="submit" class="btn btn-primary">反映</button>
+          <button type="button" class="btn btn-ghost" id="room-clear">消す</button>
+        </div>
+        <p class="hint" id="room-hint"></p>
+      </form>
+    </section>
+
     <section class="card">
       <h2>募集ステータス<span class="count">OBS表示</span></h2>
       <div class="recruit" id="recruit" role="group" aria-label="募集ステータス">
@@ -33,17 +45,6 @@
       </div>
       <p class="hint" id="recruit-hint"></p>
 
-      <form class="room-form" id="room-form" autocomplete="off">
-        <label class="field">
-          <span>ルームID<em>（OBS表示画面に出ます・空にすると消えます）</em></span>
-          <div class="room-row">
-            <input type="text" id="room-input" maxlength="24" placeholder="例）1234-5678">
-            <button type="submit" class="btn btn-primary btn-sm">反映</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="room-clear">消す</button>
-          </div>
-        </label>
-        <p class="hint" id="room-hint"></p>
-      </form>
     </section>
 
     <section class="card" id="record-card">
@@ -155,8 +156,21 @@
             <input type="text" id="set-mydeck" list="mydeck-list" maxlength="40" placeholder="例）赤単我我我">
           </label>
         </div>
+        <label class="field">
+          <span>1日の区切り<em>（深夜まで配信するとき用）</em></span>
+          <select id="set-cutoff">
+            <option value="0">0時（ふつうのカレンダーどおり）</option>
+            <option value="3">3時（深夜2:59までを前日として数える）</option>
+            <option value="4">4時（深夜3:59までを前日として数える）</option>
+            <option value="5">5時（深夜4:59までを前日として数える）</option>
+            <option value="6">6時（朝5:59までを前日として数える）</option>
+            <option value="7">7時（朝6:59までを前日として数える）</option>
+            <option value="8">8時（朝7:59までを前日として数える）</option>
+          </select>
+        </label>
         <button type="submit" class="btn btn-ghost">保存</button>
         <p class="hint">自分のデッキは、対戦を記録するときの初期値になります。デッキを変えたらここを書き換えてください。</p>
+        <p class="hint">「1日の区切り」を変えると、過去の記録もまとめ直します。記録が消えることはありません。</p>
       </form>
     </section>
 

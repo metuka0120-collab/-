@@ -47,7 +47,7 @@ body {
   display: flex;
   align-items: center;
   gap: calc(9px * var(--scale));
-  padding: 0 calc(20px * var(--scale)) 0 calc(18px * var(--scale));
+  padding: 0 calc(20px * var(--scale)) 0 calc(16px * var(--scale));
   flex: none;
   background: linear-gradient(90deg, #45b6ff, #a45cff);
   color: #08111f;
@@ -56,11 +56,6 @@ body {
 }
 .bar.no-head .head { display: none; }
 
-.head-label {
-  font-size: calc(13px * var(--scale));
-  font-weight: 700;
-  letter-spacing: .1em;
-}
 .head-rec {
   display: flex;
   align-items: baseline;
@@ -118,8 +113,9 @@ body {
 }
 
 .no {
-  font-size: calc(13px * var(--scale));
-  color: #99a5c2;
+  font-size: calc(17px * var(--scale));
+  font-weight: 700;
+  color: #c4cee6;
   font-variant-numeric: tabular-nums;
   flex: none;
 }

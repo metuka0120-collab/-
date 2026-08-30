@@ -8,7 +8,25 @@
 
 var state = { settings: {}, history: [], stats: {}, totalStats: {}, opponents: [] };
 
-var FONT = '"Yu Gothic UI", "Hiragino Sans", "Meiryo", "Noto Sans JP", sans-serif';
+/** 選べるフォント（Windows 10/11 に標準で入っているものだけ） */
+var FONTS = {
+  gothic:   '"Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif',
+  ud:       '"BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic UI", "Meiryo", sans-serif',
+  mincho:   '"Yu Mincho", "BIZ UDPMincho", "MS PMincho", "Hiragino Mincho ProN", serif',
+  kyokasho: '"UD Digi Kyokasho NP-R", "UD Digi Kyokasho N-R", "Yu Gothic UI", sans-serif'
+};
+
+/** 選べるアクセント色（上のライン・勝率・デッキ名の色） */
+var ACCENTS = {
+  blue:   { bar: ['#45b6ff', '#a45cff'], dark: '#63b8ff', light: '#1f7ae0' },
+  red:    { bar: ['#ff8a5c', '#ff4d6d'], dark: '#ff9270', light: '#d9483f' },
+  green:  { bar: ['#4fe39b', '#21c7a8'], dark: '#5fe0b0', light: '#0f9d70' },
+  pink:   { bar: ['#ff8fd0', '#b06cff'], dark: '#ff9ed6', light: '#d1479b' },
+  orange: { bar: ['#ffc061', '#ff7a3d'], dark: '#ffc772', light: '#d97a1f' },
+  mono:   { bar: ['#cfd6e6', '#8b93a8'], dark: '#c3cadb', light: '#5a6480' }
+};
+
+var FONT = FONTS.gothic;
 var WIDTH = 1200;   // 画像の横幅（px）
 var SCALE = 2;      // 高解像度で描いて縮小表示する
 
@@ -36,7 +54,7 @@ var THEMES = {
 var opts = {
   day: 'today', theme: 'dark', cols: 'auto',
   comment: true, myName: false, myDeck: false, h2h: false, stamps: true, icons: true,
-  title: '', note: ''
+  title: '', note: null
 };
 
 function $(id) { return document.getElementById(id); }
@@ -134,6 +152,46 @@ function fit(ctx, text, maxWidth) {
   return text.slice(0, lo) + '…';
 }
 
+/**
+ * 長い文章を折り返す。「…」で切らずに、複数行に分けて返す。
+ * 日本語はどこでも折り返せるが、行頭に来てほしくない記号は前の行に残す。
+ */
+var NO_LINE_START = '、。，．・：；？！ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮー」』）］｝〉》】〕”’!?,.:;)]}';
+
+function wrapText(ctx, text, maxWidth, maxLines) {
+  text = String(text == null ? '' : text);
+  if (!text) return [];
+
+  var lines = [];
+  var line = '';
+
+  for (var i = 0; i < text.length; i++) {
+    var ch = text.charAt(i);
+    var next = line + ch;
+
+    if (ctx.measureText(next).width > maxWidth && line) {
+      // 行頭に来てほしくない文字なら、前の行にぶら下げる
+      if (NO_LINE_START.indexOf(ch) !== -1) {
+        lines.push(next);
+        line = '';
+      } else {
+        lines.push(line);
+        line = ch;
+      }
+      if (maxLines && lines.length >= maxLines) {
+        // 入りきらないぶんだけは最後の行を詰める
+        var rest = text.slice(i + (line ? 0 : 1));
+        if (rest) lines[lines.length - 1] = fit(ctx, lines[lines.length - 1] + rest, maxWidth);
+        return lines;
+      }
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return maxLines ? lines.slice(0, maxLines) : lines;
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
@@ -223,7 +281,17 @@ function drawStamps(ctx, ids, leftX, centerY, size, gap) {
 function draw() {
   var canvas = $('cv');
   var ctx = canvas.getContext('2d');
-  var t = THEMES[opts.theme] || THEMES.dark;
+
+  // 見た目の設定（フォント・アクセント色・ひとことの大きさ）を反映する
+  var style = (state.settings && state.settings.summary) || {};
+  FONT = FONTS[style.font] || FONTS.gothic;
+  var accent = ACCENTS[style.accent] || ACCENTS.blue;
+  var noteSize = Number(style.noteSize) || 22;
+  var noteText = opts.note != null ? opts.note : (style.note || '');
+
+  var t = Object.assign({}, THEMES[opts.theme] || THEMES.dark);
+  t.accent = opts.theme === 'light' ? accent.light : accent.dark;
+
   var allRecords = targetRecords();
   var records = allRecords.slice(0, MAX_ROWS);
   var overflow = allRecords.length - records.length;
@@ -252,22 +320,39 @@ function draw() {
     : { name: 28, deck: 21, comment: 20, badge: 19, no: 17, rowPad: 14, lineGap: 28, stamp: 56 };
   var STAMP_GAP = 9;
 
+  var innerW = colW - 36;
+  var STAMP_MARGIN = 18;
+
   // 各行の高さ（内容によって変わる）
   var rows = records.map(function (r) {
-    var lines = 2; // 1行目：名前 / 2行目：デッキ
-    var comment = opts.comment && r.comment ? r.comment : '';
-    if (comment) lines++;
+    var stampIds = opts.stamps ? usableStamps(r.stamps) : [];
+    var stampBlock = stampIds.length
+      ? stampIds.length * sz.stamp + (stampIds.length - 1) * STAMP_GAP
+      : 0;
+    var textW = innerW - (stampBlock ? stampBlock + STAMP_MARGIN : 0);
+
+    // 感想は「…」で切らず、入りきらなければ折り返して行を増やす
+    var commentLines = [];
+    if (opts.comment && r.comment) {
+      setFont(ctx, sz.comment, '');
+      commentLines = wrapText(ctx, '「' + r.comment + '」', textW, 0);
+    }
+
     var h2hText = '';
     if (opts.h2h) {
       var rec = h2hOf(r.name);
-      if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE'; lines++; }
+      if (rec.total > 1) h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE';
     }
-    var stampIds = opts.stamps ? usableStamps(r.stamps) : [];
+
+    var lines = 2 + commentLines.length + (h2hText ? 1 : 0); // 1行目：名前 / 2行目：デッキ
     var height = sz.rowPad * 2 + lines * sz.lineGap;
     // スタンプが行からはみ出さないだけの高さは確保する
     if (stampIds.length) height = Math.max(height, sz.stamp + 22);
 
-    return { r: r, comment: comment, h2hText: h2hText, stampIds: stampIds, h: height };
+    return {
+      r: r, commentLines: commentLines, h2hText: h2hText,
+      stampIds: stampIds, stampBlock: stampBlock, textW: textW, h: height
+    };
   });
 
   var colHeights = [0, 0];
@@ -282,7 +367,12 @@ function draw() {
   }
 
   var headerH = 178;
-  var noteH = opts.note ? 56 : 0;
+
+  // ひとことも折り返して、切れないようにする
+  setFont(ctx, noteSize, '');
+  var noteLines = noteText ? wrapText(ctx, noteText, WIDTH - pad * 2, 0) : [];
+  var noteLineH = Math.round(noteSize * 1.5);
+  var noteH = noteLines.length ? noteLines.length * noteLineH + 24 : 0;
   var overflowH = overflow > 0 ? 40 : 0;
   var listH = Math.max(colHeights[0], colHeights[1]);
   var height = headerH + (total ? listH + 18 : 120) + overflowH + noteH + pad;
@@ -303,8 +393,8 @@ function draw() {
 
   // 上端のアクセントライン
   var accentBar = ctx.createLinearGradient(0, 0, WIDTH, 0);
-  accentBar.addColorStop(0, '#45b6ff');
-  accentBar.addColorStop(1, '#a45cff');
+  accentBar.addColorStop(0, accent.bar[0]);
+  accentBar.addColorStop(1, accent.bar[1]);
   ctx.fillStyle = accentBar;
   ctx.fillRect(0, 0, WIDTH, 6);
 
@@ -386,7 +476,7 @@ function draw() {
       ctx.fill();
 
       var innerX = x + 18;
-      var innerW = colW - 36;
+      var textW = row.textW;
       var lineY = y + sz.rowPad + sz.lineGap - 8;
 
       // 1行目：番号 / 勝敗 / 名前
@@ -406,15 +496,9 @@ function draw() {
       ctx.fillText(isWin ? 'WIN' : 'LOSE', badgeX + badgeW / 2, lineY + 1);
       ctx.textAlign = 'left';
 
-      // スタンプは行の右端に、行の高さいっぱいの大きさで置く。
-      // 文字が重ならないよう、すべての行をスタンプの手前までに収める。
-      var stampBlock = row.stampIds.length
-        ? row.stampIds.length * sz.stamp + (row.stampIds.length - 1) * STAMP_GAP
-        : 0;
-      var textW = innerW - (stampBlock ? stampBlock + 18 : 0);
-
-      if (stampBlock) {
-        drawStamps(ctx, row.stampIds, innerX + innerW - stampBlock, y + row.h / 2, sz.stamp, STAMP_GAP);
+      // スタンプは行の右端に、行の高さいっぱいの大きさで縦中央に置く
+      if (row.stampBlock) {
+        drawStamps(ctx, row.stampIds, innerX + innerW - row.stampBlock, y + row.h / 2, sz.stamp, STAMP_GAP);
       }
 
       var nameX = badgeX + badgeW + 14;
@@ -454,12 +538,14 @@ function draw() {
         ctx.fillText(fit(ctx, r.myDeck, textW - usedW - vsW), deckX + usedW + vsW, lineY);
       }
 
-      // 3行目：感想
-      if (row.comment) {
-        lineY += sz.lineGap;
+      // 3行目以降：感想（長ければ折り返す）
+      if (row.commentLines.length) {
         setFont(ctx, sz.comment, '');
         ctx.fillStyle = t.comment;
-        ctx.fillText(fit(ctx, '「' + row.comment + '」', textW), innerX, lineY);
+        for (var ci = 0; ci < row.commentLines.length; ci++) {
+          lineY += sz.lineGap;
+          ctx.fillText(row.commentLines[ci], innerX, lineY);
+        }
       }
 
       // 4行目：そのリスナーとの通算
@@ -485,11 +571,14 @@ function draw() {
   }
 
   // --- ひとこと ---
-  if (opts.note) {
-    setFont(ctx, 22, '');
+  if (noteLines.length) {
+    setFont(ctx, noteSize, '');
     ctx.fillStyle = t.muted;
     ctx.textAlign = 'center';
-    ctx.fillText(fit(ctx, opts.note, WIDTH - pad * 2), WIDTH / 2, height - pad + 10);
+    var noteY = height - pad - (noteLines.length - 1) * noteLineH + 2;
+    for (var ni = 0; ni < noteLines.length; ni++) {
+      ctx.fillText(noteLines[ni], WIDTH / 2, noteY + ni * noteLineH);
+    }
     ctx.textAlign = 'left';
   }
 }
@@ -516,9 +605,22 @@ function refreshDayOptions() {
   select.value = opts.day;
 }
 
+var styleLoaded = false;
+
 function refresh() {
   refreshDayOptions();
   if (!$('o-title').value && state.settings.streamTitle) $('o-title').placeholder = state.settings.streamTitle;
+
+  // 保存されている見た目の設定を、最初の1回だけ画面に反映する
+  var style = state.settings.summary;
+  if (style && !styleLoaded) {
+    styleLoaded = true;
+    $('o-font').value = style.font || 'gothic';
+    $('o-accent').value = style.accent || 'blue';
+    $('o-note-size').value = style.noteSize || 22;
+    $('o-note-size-label').textContent = style.noteSize || 22;
+    if (style.note) { $('o-note').value = style.note; opts.note = style.note; }
+  }
   draw();
 }
 
@@ -544,7 +646,37 @@ $('o-h2h').addEventListener('change', function (e) { opts.h2h = e.target.checked
 $('o-stamps').addEventListener('change', function (e) { opts.stamps = e.target.checked; draw(); });
 $('o-icons').addEventListener('change', function (e) { opts.icons = e.target.checked; draw(); });
 $('o-title').addEventListener('input', function (e) { opts.title = e.target.value; draw(); });
-$('o-note').addEventListener('input', function (e) { opts.note = e.target.value; draw(); });
+
+/** 見た目の設定を保存する（打つたびに保存しないよう少し待つ） */
+var saveTimer = null;
+function saveStyle(patch) {
+  var target = (state.settings && state.settings.summary) || {};
+  Object.assign(target, patch);
+  if (state.settings) state.settings.summary = target;
+  draw();
+
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(function () {
+    fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary: patch })
+    }).catch(function () { /* 保存できなくても表示は続けられる */ });
+  }, 500);
+}
+
+$('o-font').addEventListener('change', function (e) { saveStyle({ font: e.target.value }); });
+$('o-accent').addEventListener('change', function (e) { saveStyle({ accent: e.target.value }); });
+
+$('o-note').addEventListener('input', function (e) {
+  opts.note = e.target.value;
+  saveStyle({ note: e.target.value });
+});
+
+$('o-note-size').addEventListener('input', function (e) {
+  $('o-note-size-label').textContent = e.target.value;
+  saveStyle({ noteSize: Number(e.target.value) });
+});
 
 $('download').addEventListener('click', function () {
   var name = fileName();

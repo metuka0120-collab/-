@@ -42,9 +42,9 @@ function esc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/** 「本日」はサーバーが区切り時刻をふまえて決める */
 function todayKey() {
-  var d = new Date();
-  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return (state.stats && state.stats.date) || '';
 }
 
 /** IDから登録されているスタンプを引く */
@@ -58,7 +58,7 @@ function findStamp(id) {
 /** 流す対象（本日ぶん・古い順） */
 function targets() {
   var key = todayKey();
-  var rows = (state.history || []).filter(function (h) { return h.date === key; });
+  var rows = key ? (state.history || []).filter(function (h) { return h.date === key; }) : [];
   if (ONLY_COMMENT) rows = rows.filter(function (h) { return h.comment; });
   return rows.sort(function (a, b) {
     return (a.matchNumber - b.matchNumber) || String(a.finishedAt).localeCompare(String(b.finishedAt));
