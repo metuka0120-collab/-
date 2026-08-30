@@ -16,6 +16,7 @@ const http = require('http');
 const express = require('express');
 const { WebSocketServer } = require('ws');
 const { Store, DATA_FILE } = require('./lib/store');
+const { listStamps, STAMP_DIR } = require('./lib/stamps');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -26,6 +27,8 @@ store.load();
 const app = express();
 app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+// stamps/ に置いた画像をそのまま配る
+app.use('/stamps', express.static(STAMP_DIR, { index: false, dotfiles: 'ignore' }));
 
 // ---------------------------------------------------------------
 // 画面
@@ -41,8 +44,12 @@ app.get('/overlay', (req, res) => res.sendFile(path.join(__dirname, 'public', 'o
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+function snapshot() {
+  return Object.assign(store.snapshot(), { stamps: listStamps() });
+}
+
 function broadcast() {
-  const message = JSON.stringify({ type: 'state', payload: store.snapshot() });
+  const message = JSON.stringify({ type: 'state', payload: snapshot() });
   for (const client of wss.clients) {
     if (client.readyState === 1 /* OPEN */) client.send(message);
   }
@@ -50,7 +57,7 @@ function broadcast() {
 
 wss.on('connection', (socket) => {
   // 接続直後に現在の状態を1回送る（リロード直後でも正しい表示になる）
-  socket.send(JSON.stringify({ type: 'state', payload: store.snapshot() }));
+  socket.send(JSON.stringify({ type: 'state', payload: snapshot() }));
   socket.isAlive = true;
   socket.on('pong', () => { socket.isAlive = true; });
   socket.on('error', () => { /* 切断時のエラーは無視してよい */ });
@@ -69,7 +76,7 @@ const heartbeat = setInterval(() => {
 function commit(res, body, status) {
   store.save();
   broadcast();
-  res.status(status || 200).json(Object.assign({ ok: true, state: store.snapshot() }, body || {}));
+  res.status(status || 200).json(Object.assign({ ok: true, state: snapshot() }, body || {}));
 }
 
 const badRequest = (res, message) => res.status(400).json({ ok: false, error: message });
@@ -81,7 +88,14 @@ const notFound = (res, message) => res.status(404).json({ ok: false, error: mess
 
 // 現在の状態
 app.get('/api/state', (req, res) => {
-  res.json({ ok: true, state: store.snapshot() });
+  res.json({ ok: true, state: snapshot() });
+});
+
+// stamps/ フォルダを読み直す（画像を追加したあとに押す用）
+app.post('/api/stamps/reload', (req, res) => {
+  const stamps = listStamps(true);
+  broadcast();
+  res.json({ ok: true, stamps, state: snapshot() });
 });
 
 // 配信タイトルや自分の使用デッキ
@@ -110,7 +124,7 @@ app.post('/api/match/finish', (req, res) => {
   if (!store.data.current) return badRequest(res, '現在の対戦がありません。');
   const result = req.body.result;
   if (result !== 'win' && result !== 'lose') return badRequest(res, '勝ち / 負け を選んでください。');
-  const record = store.finishMatch(result, req.body.comment);
+  const record = store.finishMatch(result, req.body.comment, req.body.stamps);
   commit(res, { record });
 });
 
@@ -168,6 +182,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  まとめ画像   : http://localhost:${PORT}/summary`);
   console.log(`  OBS表示画面  : http://localhost:${PORT}/overlay`);
   console.log(`  保存ファイル : ${DATA_FILE}`);
+  console.log(`  スタンプ置場 : ${STAMP_DIR}`);
   console.log('');
   console.log('  終了するには この画面で Ctrl + C を押してください。');
   console.log('');

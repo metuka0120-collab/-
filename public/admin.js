@@ -13,7 +13,8 @@ var state = {
   stats: { wins: 0, losses: 0, total: 0, winRate: 0, date: '' },
   totalStats: { wins: 0, losses: 0, total: 0, winRate: 0, days: 0 },
   opponents: [],
-  myDecks: []
+  myDecks: [],
+  stamps: []
 };
 
 /** 入力途中の内容が再描画で消えないように保持する */
@@ -27,7 +28,10 @@ var ui = {
   filterText: '',
   filterDay: 'today',
   filterResult: 'all',
-  settingsDirty: false
+  settingsDirty: false,
+  liveStamps: [],   // 対戦中モードで選んだスタンプ
+  quickStamps: [],  // あとから記録モードで選んだスタンプ
+  editStamps: null  // 履歴編集中のスタンプ
 };
 
 function $(id) { return document.getElementById(id); }
@@ -68,6 +72,69 @@ function h2h(name) {
     if (h.result === 'win') wins++; else losses++;
   });
   return { wins: wins, losses: losses, total: wins + losses };
+}
+
+
+// ---------------------------------------------------------
+// スタンプ
+// ---------------------------------------------------------
+
+/** IDから登録されているスタンプを引く */
+function findStamp(id) {
+  var list = state.stamps || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  // 画像を消した / 名前を変えた場合でも記録は残っているので、それらしく出す
+  if (String(id).indexOf('emoji:') === 0) {
+    return { id: id, type: 'emoji', char: String(id).slice(6), label: '' };
+  }
+  return null;
+}
+
+/** 表示だけのスタンプ（履歴カード用） */
+function stampsView(ids) {
+  if (!ids || !ids.length) return '';
+  var html = ids.map(function (id) {
+    var stamp = findStamp(id);
+    if (!stamp) return '';
+    return stamp.type === 'emoji'
+      ? '<span class="stamp-view" title="' + esc(stamp.label) + '">' + esc(stamp.char) + '</span>'
+      : '<span class="stamp-view"><img src="' + esc(stamp.url) + '" alt="' + esc(stamp.label) + '"></span>';
+  }).join('');
+  return html ? '<div class="m-stamps">' + html + '</div>' : '';
+}
+
+/**
+ * スタンプを選ぶUIを作る。
+ * selected は配列そのものを書き換える（最大3つ）。
+ */
+function mountStampPicker(container, selected, onChange) {
+  if (!container) return;
+  var list = state.stamps || [];
+
+  container.innerHTML = list.map(function (stamp) {
+    var on = selected.indexOf(stamp.id) !== -1;
+    var inner = stamp.type === 'emoji'
+      ? esc(stamp.char)
+      : '<img src="' + esc(stamp.url) + '" alt="' + esc(stamp.label) + '">';
+    return '<button type="button" class="stamp' + (on ? ' on' : '') + '" data-stamp="' + esc(stamp.id) + '" ' +
+      'title="' + esc(stamp.label) + '" aria-pressed="' + on + '">' + inner + '</button>';
+  }).join('') +
+  '<button type="button" class="stamp stamp-reload" id="stamp-reload-' + container.id + '" title="stampsフォルダを読み直す">↻</button>';
+
+  Array.prototype.forEach.call(container.querySelectorAll('button[data-stamp]'), function (b) {
+    b.addEventListener('click', function () {
+      var id = b.dataset.stamp;
+      var at = selected.indexOf(id);
+      if (at !== -1) selected.splice(at, 1);
+      else if (selected.length >= 3) { window.alert('スタンプは3つまでです。'); return; }
+      else selected.push(id);
+      mountStampPicker(container, selected, onChange);
+      if (onChange) onChange(selected);
+    });
+  });
+
+  var reload = container.querySelector('.stamp-reload');
+  if (reload) reload.addEventListener('click', function () { api('POST', '/api/stamps/reload'); });
 }
 
 // ---------------------------------------------------------
@@ -122,6 +189,7 @@ function applyState(next) {
     ui.currentId = currentId;
     ui.result = null;
     ui.comment = '';
+    ui.liveStamps = [];
   }
   render();
 }
@@ -130,6 +198,7 @@ function applyState(next) {
 // 描画
 // ---------------------------------------------------------
 function render() {
+  mountStampPicker($('q-stamps'), ui.quickStamps);
   renderCurrent();
   renderStats();
   renderSettings();
@@ -172,15 +241,16 @@ function renderCurrent() {
       '<div class="cur-name">' + esc(c.name) + '</div>' +
       '<div class="cur-deck">' + (c.deck ? esc(c.deck) : 'デッキ未入力') +
         (c.myDeck ? ' <span class="vs">VS</span> 自分: ' + esc(c.myDeck) : '') + '</div>' +
-      (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + '勝' + rec.losses + '敗</div>' : '') +
+      (rec.total ? '<div class="cur-h2h">このリスナーとは通算 ' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L</div>' : '') +
     '</div>' +
     '<div class="form" style="margin-top:12px">' +
       '<div class="results">' +
-        '<button type="button" class="btn btn-win ' + (ui.result === 'win' ? 'on' : '') + '" data-result="win">勝ち</button>' +
-        '<button type="button" class="btn btn-lose ' + (ui.result === 'lose' ? 'on' : '') + '" data-result="lose">負け</button>' +
+        '<button type="button" class="btn btn-win ' + (ui.result === 'win' ? 'on' : '') + '" data-result="win">WIN</button>' +
+        '<button type="button" class="btn btn-lose ' + (ui.result === 'lose' ? 'on' : '') + '" data-result="lose">LOSE</button>' +
       '</div>' +
       '<label class="field"><span>試合の感想</span>' +
       '<textarea id="cmt" maxlength="200" placeholder="例）最後のシールドトリガーが決まった">' + esc(ui.comment) + '</textarea></label>' +
+      '<div class="field"><span>スタンプ<em>（最大3つ）</em></span><div class="stamp-picker" id="live-stamps"></div></div>' +
       '<div class="cur-actions">' +
         '<button type="button" class="btn btn-primary" id="fin">対戦終了して保存</button>' +
         '<button type="button" class="btn btn-ghost" id="cancel">取り消す</button>' +
@@ -191,9 +261,10 @@ function renderCurrent() {
     b.addEventListener('click', function () { ui.result = b.dataset.result; renderCurrent(); });
   });
   $('cmt').addEventListener('input', function (e) { ui.comment = e.target.value; });
+  mountStampPicker($('live-stamps'), ui.liveStamps);
   $('fin').addEventListener('click', function () {
-    if (!ui.result) { window.alert('「勝ち」か「負け」を選んでください。'); return; }
-    api('POST', '/api/match/finish', { result: ui.result, comment: ui.comment });
+    if (!ui.result) { window.alert('「WIN」か「LOSE」を選んでください。'); return; }
+    api('POST', '/api/match/finish', { result: ui.result, comment: ui.comment, stamps: ui.liveStamps });
   });
   $('cancel').addEventListener('click', function () {
     if (!window.confirm('この対戦を記録せずに取り消しますか？')) return;
@@ -210,7 +281,7 @@ function renderStats() {
   $('s-total').textContent = s.total || 0;
   $('s-rate').textContent = (s.winRate || 0) + '%';
   $('s-date').textContent = '集計日：' + jpDate(s.date) + '（日付が変わると自動で 0 に戻ります）';
-  $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + '勝' + (t.losses || 0) + '敗　勝率 ' + (t.winRate || 0) + '%';
+  $('t-line').textContent = (t.total || 0) + '戦 ' + (t.wins || 0) + 'W ' + (t.losses || 0) + 'L　勝率 ' + (t.winRate || 0) + '%';
   $('t-days').textContent = t.days ? '（' + t.days + '日ぶん）' : '';
 }
 
@@ -252,10 +323,19 @@ function filtered() {
   });
 }
 
+/** 一度に描く枚数の上限。何年も貯めた履歴を「すべての日」で開いても固まらないように */
+var MAX_RENDER = 200;
+
 function renderHistory() {
   var rows = filtered();
   var area = $('history-area');
   $('h-count').textContent = rows.length;
+
+  var hidden = 0;
+  if (rows.length > MAX_RENDER) {
+    hidden = rows.length - MAX_RENDER;
+    rows = rows.slice(0, MAX_RENDER);
+  }
 
   if (!rows.length) {
     area.innerHTML = '<div class="empty">' +
@@ -277,9 +357,11 @@ function renderHistory() {
     var wins = list.filter(function (h) { return h.result === 'win'; }).length;
     var losses = list.length - wins;
     return '<div class="day-head"><b>' + jpDate(day) + '</b>' +
-      '<span class="day-rec">' + list.length + '戦 ' + wins + '勝' + losses + '敗</span></div>' +
+      '<span class="day-rec">' + list.length + '戦 ' + wins + 'W ' + losses + 'L</span></div>' +
       list.map(matchCard).join('');
-  }).join('');
+  }).join('') +
+  (hidden ? '<div class="empty">新しい方から ' + MAX_RENDER + '件を表示しています（ほか ' + hidden +
+    '件）。上の検索や絞り込みで探せます。</div>' : '');
 
   bindHistory();
 }
@@ -291,7 +373,7 @@ function matchCard(h) {
   return '<div class="match ' + h.result + '" data-id="' + h.id + '">' +
     '<div class="m-top">' +
       '<span class="m-no">' + (h.matchNumber || '-') + '戦目</span>' +
-      '<span class="m-badge ' + h.result + '">' + (h.result === 'win' ? '勝ち' : '負け') + '</span>' +
+      '<span class="m-badge ' + h.result + '">' + (h.result === 'win' ? 'WIN' : 'LOSE') + '</span>' +
       '<span class="m-name">' + esc(h.name) + '</span>' +
       '<span class="m-time">' + hhmm(h.finishedAt) + '</span>' +
       '<span class="m-acts">' +
@@ -303,8 +385,9 @@ function matchCard(h) {
       '<span class="deck-chip"><b>相手</b>' + (h.deck ? esc(h.deck) : '未入力') + '</span>' +
       (h.myDeck ? '<span class="vs">VS</span><span class="deck-chip mine"><b>自分</b>' + esc(h.myDeck) + '</span>' : '') +
     '</div>' +
+    stampsView(h.stamps) +
     (h.comment ? '<div class="m-comment">' + esc(h.comment) + '</div>' : '') +
-    (rec.total > 1 ? '<div class="m-h2h">このリスナーとは通算 <b>' + rec.total + '戦 ' + rec.wins + '勝' + rec.losses + '敗</b></div>' : '') +
+    (rec.total > 1 ? '<div class="m-h2h">このリスナーとは通算 <b>' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L</b></div>' : '') +
   '</div>';
 }
 
@@ -317,11 +400,12 @@ function matchEditCard(h) {
     '<div class="two">' +
       '<label class="field"><span>自分のデッキ</span><input type="text" name="myDeck" value="' + esc(h.myDeck) + '" maxlength="40"></label>' +
       '<label class="field"><span>勝敗</span><select name="result">' +
-        '<option value="win"' + (h.result === 'win' ? ' selected' : '') + '>勝ち</option>' +
-        '<option value="lose"' + (h.result === 'lose' ? ' selected' : '') + '>負け</option>' +
+        '<option value="win"' + (h.result === 'win' ? ' selected' : '') + '>WIN</option>' +
+        '<option value="lose"' + (h.result === 'lose' ? ' selected' : '') + '>LOSE</option>' +
       '</select></label>' +
     '</div>' +
     '<label class="field"><span>試合の感想</span><textarea name="comment" maxlength="200">' + esc(h.comment) + '</textarea></label>' +
+    '<div class="field"><span>スタンプ<em>（最大3つ）</em></span><div class="stamp-picker" id="edit-stamps"></div></div>' +
     '<div class="edit-acts">' +
       '<button type="button" class="btn btn-ghost btn-sm" data-a="cancel-edit">キャンセル</button>' +
       '<button type="submit" class="btn btn-primary btn-sm">保存</button>' +
@@ -336,8 +420,8 @@ function bindHistory() {
     Array.prototype.forEach.call(card.querySelectorAll('button[data-a]'), function (b) {
       b.addEventListener('click', function () {
         var action = b.dataset.a;
-        if (action === 'edit') { ui.editId = id; renderHistory(); }
-        else if (action === 'cancel-edit') { ui.editId = null; renderHistory(); }
+        if (action === 'edit') { ui.editId = id; ui.editStamps = null; renderHistory(); }
+        else if (action === 'cancel-edit') { ui.editId = null; ui.editStamps = null; renderHistory(); }
         else if (action === 'del') {
           if (!window.confirm('この対戦記録を削除しますか？成績も再集計されます。')) return;
           api('DELETE', '/api/history/' + id);
@@ -345,18 +429,30 @@ function bindHistory() {
       });
     });
 
+    var picker = card.querySelector('#edit-stamps');
+    if (picker) {
+      if (!ui.editStamps) {
+        var target = state.history.filter(function (x) { return x.id === id; })[0];
+        ui.editStamps = target && target.stamps ? target.stamps.slice() : [];
+      }
+      mountStampPicker(picker, ui.editStamps);
+    }
+
     var form = card.querySelector('form.m-edit');
     if (form) form.addEventListener('submit', function (e) {
       e.preventDefault();
       var name = form.elements.name.value.trim();
       if (!name) { window.alert('リスナー名を入力してください。'); return; }
+      var stamps = ui.editStamps || [];
       ui.editId = null;
+      ui.editStamps = null;
       api('PUT', '/api/history/' + id, {
         name: name,
         deck: form.elements.deck.value.trim(),
         myDeck: form.elements.myDeck.value.trim(),
         result: form.elements.result.value,
-        comment: form.elements.comment.value
+        comment: form.elements.comment.value,
+        stamps: stamps
       });
     });
   });
@@ -367,7 +463,7 @@ function rankRow(label, sub, rec) {
   var pct = rec.total ? (rec.wins / rec.total) * 100 : 0;
   return '<div class="rank-row">' +
     '<span class="rank-name">' + esc(label) + (sub ? '<span class="rank-sub">' + esc(sub) + '</span>' : '') + '</span>' +
-    '<span class="rank-rec"><span class="w">' + rec.wins + '</span>勝 <span class="l">' + rec.losses + '</span>敗</span>' +
+    '<span class="rank-rec"><span class="w">' + rec.wins + '</span>W <span class="l">' + rec.losses + '</span>L</span>' +
     '<span class="rank-bar"><i style="width:' + pct.toFixed(1) + '%"></i></span>' +
     '<span class="rank-rate">' + rec.winRate + '%</span>' +
   '</div>';
@@ -421,17 +517,20 @@ $('quick-form').addEventListener('submit', function (e) {
   e.preventDefault();
   var name = $('q-name').value.trim();
   if (!name) { window.alert('リスナー名を入力してください。'); return; }
-  if (!ui.quickResult) { window.alert('「勝ち」か「負け」を選んでください。'); return; }
+  if (!ui.quickResult) { window.alert('「WIN」か「LOSE」を選んでください。'); return; }
 
   api('POST', '/api/history', {
     name: name,
     deck: $('q-deck').value.trim(),
     myDeck: $('q-mydeck').value.trim(),
     result: ui.quickResult,
-    comment: $('q-comment').value
+    comment: $('q-comment').value,
+    stamps: ui.quickStamps
   }).then(function () {
     $('q-name').value = ''; $('q-deck').value = ''; $('q-comment').value = '';
     ui.quickResult = null;
+    ui.quickStamps = [];
+    mountStampPicker($('q-stamps'), ui.quickStamps);
     Array.prototype.forEach.call(document.querySelectorAll('[data-q-result]'), function (x) { x.classList.remove('on'); });
     $('q-name').focus();
   });

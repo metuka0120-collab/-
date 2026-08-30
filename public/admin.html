@@ -54,13 +54,17 @@
             <input type="text" id="q-mydeck" list="mydeck-list" placeholder="例）赤単我我我" maxlength="40">
           </label>
           <div class="results">
-            <button type="button" class="btn btn-win" data-q-result="win">勝ち</button>
-            <button type="button" class="btn btn-lose" data-q-result="lose">負け</button>
+            <button type="button" class="btn btn-win" data-q-result="win">WIN</button>
+            <button type="button" class="btn btn-lose" data-q-result="lose">LOSE</button>
           </div>
           <label class="field">
             <span>試合の感想</span>
             <textarea id="q-comment" placeholder="例）最後のシールドトリガーが決まった" maxlength="200"></textarea>
           </label>
+          <div class="field">
+            <span>スタンプ<em>（最大3つ・気持ちを一目で分かるように）</em></span>
+            <div class="stamp-picker" id="q-stamps"></div>
+          </div>
           <button type="submit" class="btn btn-primary">この対戦を履歴に追加</button>
         </form>
       </div>
@@ -69,8 +73,8 @@
     <section class="card">
       <h2>本日の成績</h2>
       <div class="stats">
-        <div class="stat w"><span>勝利</span><b id="s-win">0</b></div>
-        <div class="stat l"><span>敗北</span><b id="s-lose">0</b></div>
+        <div class="stat w"><span>WIN</span><b id="s-win">0</b></div>
+        <div class="stat l"><span>LOSE</span><b id="s-lose">0</b></div>
         <div class="stat"><span>試合数</span><b id="s-total">0</b></div>
         <div class="stat r"><span>勝率</span><b id="s-rate">0%</b></div>
       </div>
@@ -123,8 +127,8 @@
         </select>
         <select id="f-result">
           <option value="all">勝敗すべて</option>
-          <option value="win">勝ちのみ</option>
-          <option value="lose">負けのみ</option>
+          <option value="win">WINのみ</option>
+          <option value="lose">LOSEのみ</option>
         </select>
         <button type="button" class="btn btn-ghost btn-sm" id="clear-today">本日の履歴をリセット</button>
       </div>

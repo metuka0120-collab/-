@@ -35,7 +35,7 @@ var THEMES = {
 
 var opts = {
   day: 'today', theme: 'dark', cols: 'auto',
-  comment: true, myDeck: true, h2h: false, title: '', note: ''
+  comment: true, myDeck: true, h2h: false, stamps: true, title: '', note: ''
 };
 
 function $(id) { return document.getElementById(id); }
@@ -89,13 +89,18 @@ function availableDays() {
   return days;
 }
 
+/** 1枚の画像に載せる最大の試合数。これを超えると画像が縦に長くなりすぎて読めない */
+var MAX_ROWS = 40;
+
 function targetRecords() {
   var records;
   if (opts.day === 'all') records = state.history.slice();
   else records = state.history.filter(function (h) { return h.date === opts.day; });
   // 古い順（1戦目が上）に並べる
   return records.sort(function (a, b) {
-    return (a.matchNumber - b.matchNumber) || String(a.finishedAt).localeCompare(String(b.finishedAt));
+    return String(a.date).localeCompare(String(b.date)) ||
+      (a.matchNumber - b.matchNumber) ||
+      String(a.finishedAt).localeCompare(String(b.finishedAt));
   });
 }
 
@@ -148,6 +153,59 @@ function panel(ctx, x, y, w, h, r, fill, stroke) {
   if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
 }
 
+
+// ---------------------------------------------------------
+// スタンプ画像の読み込み
+// 画像は読み込みが終わってから描けるので、読めたらもう一度描き直す
+// ---------------------------------------------------------
+var imageCache = {};
+
+function stampImage(url) {
+  if (imageCache[url] !== undefined) return imageCache[url];
+  imageCache[url] = null; // 読み込み中
+  var img = new Image();
+  img.onload = function () { imageCache[url] = img; draw(); };
+  img.onerror = function () { imageCache[url] = false; }; // 消えた画像は諦める
+  img.src = url;
+  return null;
+}
+
+function findStamp(id) {
+  var list = state.stamps || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  if (String(id).indexOf('emoji:') === 0) return { id: id, type: 'emoji', char: String(id).slice(6) };
+  return null;
+}
+
+/** 1試合ぶんのスタンプを右端から順に描く。描いた幅を返す */
+function drawStamps(ctx, ids, rightX, centerY, size) {
+  if (!ids || !ids.length) return 0;
+  var gap = 6;
+  var x = rightX;
+  var drawn = 0;
+
+  for (var i = ids.length - 1; i >= 0; i--) {
+    var stamp = findStamp(ids[i]);
+    if (!stamp) continue;
+
+    x -= size;
+    if (stamp.type === 'emoji') {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      setFont(ctx, size, '');
+      ctx.fillText(stamp.char, x + size / 2, centerY);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+    } else {
+      var img = stampImage(stamp.url);
+      if (img) ctx.drawImage(img, x, centerY - size / 2, size, size);
+    }
+    x -= gap;
+    drawn += size + gap;
+  }
+  return drawn;
+}
+
 // ---------------------------------------------------------
 // 画像を描く
 // ---------------------------------------------------------
@@ -155,7 +213,9 @@ function draw() {
   var canvas = $('cv');
   var ctx = canvas.getContext('2d');
   var t = THEMES[opts.theme] || THEMES.dark;
-  var records = targetRecords();
+  var allRecords = targetRecords();
+  var records = allRecords.slice(0, MAX_ROWS);
+  var overflow = allRecords.length - records.length;
 
   // 自分のデッキが最初から最後まで同じなら、各行に繰り返さず見出しにまとめる
   var myDeckSet = [];
@@ -165,13 +225,13 @@ function draw() {
   var headerMyDeck = myDeckSet.length === 1 ? myDeckSet[0] : (myDeckSet.length ? '' : state.settings.myDeck);
   var perRowMyDeck = opts.myDeck && myDeckSet.length > 1;
 
-  var wins = records.filter(function (r) { return r.result === 'win'; }).length;
-  var losses = records.length - wins;
-  var total = records.length;
+  var wins = allRecords.filter(function (r) { return r.result === 'win'; }).length;
+  var losses = allRecords.length - wins;
+  var total = allRecords.length;
   var rate = total ? Math.round((wins / total) * 1000) / 10 : 0;
 
   // --- 行の高さを決める ---
-  var twoCol = opts.cols === '2' || (opts.cols === 'auto' && total > 12);
+  var twoCol = opts.cols === '2' || (opts.cols === 'auto' && records.length > 12);
   var pad = 46;
   var gap = twoCol ? 22 : 0;
   var colW = twoCol ? (WIDTH - pad * 2 - gap) / 2 : WIDTH - pad * 2;
@@ -188,7 +248,7 @@ function draw() {
     var h2hText = '';
     if (opts.h2h) {
       var rec = h2hOf(r.name);
-      if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + '勝' + rec.losses + '敗'; lines++; }
+      if (rec.total > 1) { h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'W ' + rec.losses + 'L'; lines++; }
     }
     return { r: r, comment: comment, h2hText: h2hText, h: sz.rowPad * 2 + lines * sz.lineGap };
   });
@@ -206,8 +266,9 @@ function draw() {
 
   var headerH = 178;
   var noteH = opts.note ? 56 : 0;
+  var overflowH = overflow > 0 ? 40 : 0;
   var listH = Math.max(colHeights[0], colHeights[1]);
-  var height = headerH + (total ? listH + 18 : 120) + noteH + pad;
+  var height = headerH + (total ? listH + 18 : 120) + overflowH + noteH + pad;
 
   // --- キャンバス準備 ---
   canvas.width = WIDTH * SCALE;
@@ -271,8 +332,8 @@ function draw() {
 
   setFont(ctx, 15, '');
   ctx.fillStyle = t.dim;
-  ctx.fillText('勝ち', boxX + cellW * 0.5, boxY + 86);
-  ctx.fillText('負け', boxX + cellW * 1.5, boxY + 86);
+  ctx.fillText('WIN', boxX + cellW * 0.5, boxY + 86);
+  ctx.fillText('LOSE', boxX + cellW * 1.5, boxY + 86);
   ctx.fillText('勝率（全' + total + '戦）', boxX + cellW * 2.5, boxY + 86);
 
   // --- 区切り線 ---
@@ -319,19 +380,23 @@ function draw() {
       ctx.fillText(noText, innerX, lineY);
 
       var badgeX = innerX + noW + 12;
-      var badgeW = sz.badge * 2.9;
+      var badgeW = sz.badge * 3.4;
       var badgeH = sz.badge + 12;
       panel(ctx, badgeX, lineY - sz.badge - 2, badgeW, badgeH, 6, isWin ? t.winBg : t.loseBg, null);
       setFont(ctx, sz.badge, 'bold');
       ctx.fillStyle = isWin ? t.win : t.lose;
       ctx.textAlign = 'center';
-      ctx.fillText(isWin ? '勝ち' : '負け', badgeX + badgeW / 2, lineY + 1);
+      ctx.fillText(isWin ? 'WIN' : 'LOSE', badgeX + badgeW / 2, lineY + 1);
       ctx.textAlign = 'left';
+
+      // スタンプは行の右端に置く。名前はその手前までに収める
+      var stampSize = Math.round(sz.name * 1.05);
+      var stampW = opts.stamps ? drawStamps(ctx, r.stamps, innerX + innerW, lineY - sz.name * 0.32, stampSize) : 0;
 
       var nameX = badgeX + badgeW + 14;
       setFont(ctx, sz.name, 'bold');
       ctx.fillStyle = t.text;
-      ctx.fillText(fit(ctx, r.name, innerX + innerW - nameX), nameX, lineY + 2);
+      ctx.fillText(fit(ctx, r.name, innerX + innerW - nameX - stampW - (stampW ? 12 : 0)), nameX, lineY + 2);
 
       // 2行目：デッキ
       lineY += sz.lineGap;
@@ -372,6 +437,16 @@ function draw() {
 
       cursorY[col] += row.h + 10;
     });
+  }
+
+  // --- 入りきらなかった試合 ---
+  if (overflow > 0) {
+    setFont(ctx, 19, '');
+    ctx.fillStyle = t.dim;
+    ctx.textAlign = 'center';
+    ctx.fillText('…ほか ' + overflow + '戦（成績は全' + total + '戦ぶんを集計しています）',
+      WIDTH / 2, headerH + Math.max(colHeights[0], colHeights[1]) + 30);
+    ctx.textAlign = 'left';
   }
 
   // --- ひとこと ---
@@ -430,6 +505,7 @@ $('o-cols').addEventListener('change', function (e) { opts.cols = e.target.value
 $('o-comment').addEventListener('change', function (e) { opts.comment = e.target.checked; draw(); });
 $('o-mydeck').addEventListener('change', function (e) { opts.myDeck = e.target.checked; draw(); });
 $('o-h2h').addEventListener('change', function (e) { opts.h2h = e.target.checked; draw(); });
+$('o-stamps').addEventListener('change', function (e) { opts.stamps = e.target.checked; draw(); });
 $('o-title').addEventListener('input', function (e) { opts.title = e.target.value; draw(); });
 $('o-note').addEventListener('input', function (e) { opts.note = e.target.value; draw(); });
 
