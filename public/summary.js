@@ -59,6 +59,13 @@ var opts = {
 
 function $(id) { return document.getElementById(id); }
 
+/** HTMLに文字を差し込むときの用心（ファイル名に記号が入っていても壊れないように） */
+function esc(value) {
+  return String(value == null ? '' : value)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function jpDate(key) {
   if (!key) return '';
   var p = String(key).split('-');
@@ -219,6 +226,9 @@ function panel(ctx, x, y, w, h, r, fill, stroke) {
 // ---------------------------------------------------------
 var imageCache = {};
 
+/** 直近に描いた配置。キャラをドラッグするときの当たり判定に使う */
+var layout = { characters: [], height: 0 };
+
 function stampImage(url) {
   if (imageCache[url] !== undefined) return imageCache[url];
   imageCache[url] = null; // 読み込み中
@@ -227,6 +237,38 @@ function stampImage(url) {
   img.onerror = function () { imageCache[url] = false; }; // 消えた画像は諦める
   img.src = url;
   return null;
+}
+
+/**
+ * 背景画像を敷く。
+ *   cover   … 縦横比を保ったまま、はみ出してでも全体を覆う
+ *   contain … 全体が入る大きさにして中央に置く
+ *   tile    … 元の大きさのまま敷きつめる
+ */
+function drawBackground(ctx, img, W, H, fit, opacity) {
+  if (!img || opacity <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, Math.max(0, opacity / 100));
+
+  if (fit === 'tile') {
+    var pattern = ctx.createPattern(img, 'repeat');
+    if (pattern) { ctx.fillStyle = pattern; ctx.fillRect(0, 0, W, H); }
+  } else {
+    var ratio = fit === 'contain'
+      ? Math.min(W / img.width, H / img.height)
+      : Math.max(W / img.width, H / img.height);
+    var w = img.width * ratio;
+    var h = img.height * ratio;
+    ctx.drawImage(img, (W - w) / 2, (H - h) / 2, w, h);
+  }
+  ctx.restore();
+}
+
+/** キャラ画像の置き場所と大きさを、実際の座標に直す */
+function characterBox(chara, img, W, H) {
+  var w = W * chara.scale;
+  var h = img && img.width ? w * (img.height / img.width) : w;
+  return { x: chara.x * W - w / 2, y: chara.y * H - h / 2, w: w, h: h };
 }
 
 /** 丸く切り抜いて画像を描く */
@@ -238,6 +280,13 @@ function drawCircleImage(ctx, img, x, y, size) {
   ctx.clip();
   ctx.drawImage(img, x, y, size, size);
   ctx.restore();
+}
+
+/** images/ フォルダの画像をファイル名から引く */
+function findImage(file) {
+  var list = state.images || [];
+  for (var i = 0; i < list.length; i++) if (list[i].file === file) return list[i];
+  return null;
 }
 
 function findStamp(id) {
@@ -291,6 +340,9 @@ function draw() {
 
   var t = Object.assign({}, THEMES[opts.theme] || THEMES.dark);
   t.accent = opts.theme === 'light' ? accent.light : accent.dark;
+
+  var background = style.background || {};
+  var characters = Array.isArray(style.characters) ? style.characters : [];
 
   var allRecords = targetRecords();
   var records = allRecords.slice(0, MAX_ROWS);
@@ -368,11 +420,14 @@ function draw() {
 
   var headerH = 178;
 
-  // ひとことも折り返して、切れないようにする
+  // ひとことは枠の中に入れる。折り返して切れないようにする
+  var NOTE_PAD_V = 18;   // 枠の内側の上下の余白
+  var NOTE_PAD_H = 26;   // 枠の内側の左右の余白
   setFont(ctx, noteSize, '');
-  var noteLines = noteText ? wrapText(ctx, noteText, WIDTH - pad * 2, 0) : [];
+  var noteLines = noteText ? wrapText(ctx, noteText, WIDTH - pad * 2 - NOTE_PAD_H * 2, 0) : [];
   var noteLineH = Math.round(noteSize * 1.5);
-  var noteH = noteLines.length ? noteLines.length * noteLineH + 24 : 0;
+  var noteBoxH = noteLines.length ? noteLines.length * noteLineH + NOTE_PAD_V * 2 : 0;
+  var noteH = noteBoxH ? noteBoxH + 16 : 0;
   var overflowH = overflow > 0 ? 40 : 0;
   var listH = Math.max(colHeights[0], colHeights[1]);
   var height = headerH + (total ? listH + 18 : 120) + overflowH + noteH + pad;
@@ -383,6 +438,7 @@ function draw() {
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
   ctx.textBaseline = 'alphabetic';
   $('size-label').textContent = WIDTH + ' × ' + Math.round(height) + ' px';
+  layout.height = Math.round(height);
 
   // --- 背景 ---
   var bg = ctx.createLinearGradient(0, 0, WIDTH, height);
@@ -390,6 +446,14 @@ function draw() {
   bg.addColorStop(1, t.bg2);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, WIDTH, height);
+
+  // 背景画像（下地の上に重ねる）
+  if (background.file) {
+    var bgEntry = findImage(background.file);
+    if (bgEntry) {
+      drawBackground(ctx, stampImage(bgEntry.url), WIDTH, height, background.fit, background.opacity);
+    }
+  }
 
   // 上端のアクセントライン
   var accentBar = ctx.createLinearGradient(0, 0, WIDTH, 0);
@@ -570,16 +634,32 @@ function draw() {
     ctx.textAlign = 'left';
   }
 
-  // --- ひとこと ---
+  // --- キャラ画像（いちばん手前に置く） ---
+  layout.characters = [];
+  characters.forEach(function (chara) {
+    var entry = findImage(chara.file);
+    if (!entry) return;
+    var img = stampImage(entry.url);
+    if (!img) return;
+    var box = characterBox(chara, img, WIDTH, height);
+    ctx.drawImage(img, box.x, box.y, box.w, box.h);
+    layout.characters.push({ id: chara.id, box: box });
+  });
+
+  // --- ひとこと（枠つき） ---
   if (noteLines.length) {
+    var noteBoxY = height - pad - noteBoxH;
+    panel(ctx, pad, noteBoxY, WIDTH - pad * 2, noteBoxH, 12, t.card, t.cardLine);
+
     setFont(ctx, noteSize, '');
-    ctx.fillStyle = t.muted;
+    ctx.fillStyle = t.comment;
     ctx.textAlign = 'center';
-    var noteY = height - pad - (noteLines.length - 1) * noteLineH + 2;
+    ctx.textBaseline = 'middle';
     for (var ni = 0; ni < noteLines.length; ni++) {
-      ctx.fillText(noteLines[ni], WIDTH / 2, noteY + ni * noteLineH);
+      ctx.fillText(noteLines[ni], WIDTH / 2, noteBoxY + NOTE_PAD_V + noteLineH * (ni + 0.5));
     }
     ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
@@ -620,7 +700,16 @@ function refresh() {
     $('o-note-size').value = style.noteSize || 22;
     $('o-note-size-label').textContent = style.noteSize || 22;
     if (style.note) { $('o-note').value = style.note; opts.note = style.note; }
+
+    var bg = style.background || {};
+    $('o-bg-opacity').value = bg.opacity != null ? bg.opacity : 35;
+    $('o-bg-op-label').textContent = $('o-bg-opacity').value;
+    $('o-bg-fit').value = bg.fit || 'cover';
+    $('bg-opts').hidden = !bg.file;
   }
+
+  refreshImageOptions();
+  renderCharacters();
   draw();
 }
 
@@ -708,6 +797,174 @@ $('copy').addEventListener('click', function () {
       say('コピーできませんでした。「PNG画像として保存」を使ってください。');
     });
   }, 'image/png');
+});
+
+
+// ---------------------------------------------------------
+// 背景とキャラ画像の操作
+// ---------------------------------------------------------
+var selectedChara = null; // 選択中のキャラのID
+
+/** images/ フォルダの中身を選択肢に並べる */
+function refreshImageOptions() {
+  var list = state.images || [];
+  var options = list.map(function (img) {
+    var label = img.group !== '画像' ? img.group + ' / ' + img.label : img.label;
+    return '<option value="' + esc(img.file) + '">' + esc(label) + '</option>';
+  }).join('');
+
+  var bg = $('o-bg');
+  var keep = bg.value;
+  bg.innerHTML = '<option value="">なし</option>' + options;
+  bg.value = (state.settings.summary && state.settings.summary.background &&
+              state.settings.summary.background.file) || keep || '';
+
+  $('o-char-add').innerHTML = '<option value="">' +
+    (list.length ? '選んで追加…' : 'images フォルダに画像を入れてください') + '</option>' + options;
+}
+
+/** 置いたキャラ画像の一覧を描く */
+function renderCharacters() {
+  var chars = (state.settings.summary && state.settings.summary.characters) || [];
+  var box = $('char-list');
+
+  if (!chars.length) {
+    box.innerHTML = '<p class="hint">まだ置いていません。上の「キャラ画像を追加」から選ぶと、画像の上に出ます。</p>';
+    return;
+  }
+
+  box.innerHTML = chars.map(function (c) {
+    var entry = findImage(c.file);
+    return '<div class="char-row' + (c.id === selectedChara ? ' on' : '') + '" data-id="' + esc(c.id) + '">' +
+      (entry ? '<img class="char-thumb" src="' + esc(entry.url) + '" alt="">' : '<span class="char-thumb"></span>') +
+      '<span class="char-body">' +
+        '<span class="char-name">' + esc(entry ? entry.label : c.file + '（見つかりません）') + '</span>' +
+        '<input type="range" min="5" max="120" step="1" value="' + Math.round(c.scale * 100) + '" data-scale>' +
+      '</span>' +
+      '<button type="button" class="btn btn-danger btn-sm" data-remove>削除</button>' +
+    '</div>';
+  }).join('');
+
+  Array.prototype.forEach.call(box.querySelectorAll('.char-row'), function (row) {
+    var id = row.dataset.id;
+    row.addEventListener('mousedown', function (event) {
+      // ボタンやつまみの上では選択し直さない（作り直すと押せなくなる）
+      if (event.target.closest('button, input')) return;
+      selectCharacter(id);
+    });
+    row.querySelector('[data-scale]').addEventListener('input', function (e) {
+      updateCharacter(id, { scale: Number(e.target.value) / 100 });
+    });
+    row.querySelector('[data-remove]').addEventListener('click', function () {
+      var next = chars.filter(function (c) { return c.id !== id; });
+      if (selectedChara === id) selectedChara = null;
+      saveStyle({ characters: next });
+      renderCharacters();
+    });
+  });
+}
+
+/** 選択中の表示だけを切り替える（一覧は作り直さない） */
+function selectCharacter(id) {
+  selectedChara = id;
+  Array.prototype.forEach.call(document.querySelectorAll('.char-row'), function (row) {
+    row.classList.toggle('on', row.dataset.id === id);
+  });
+}
+
+function updateCharacter(id, patch) {
+  var chars = ((state.settings.summary && state.settings.summary.characters) || []).map(function (c) {
+    return c.id === id ? Object.assign({}, c, patch) : c;
+  });
+  saveStyle({ characters: chars });
+}
+
+$('o-bg').addEventListener('change', function (e) {
+  var current = (state.settings.summary && state.settings.summary.background) || {};
+  saveStyle({ background: Object.assign({}, current, { file: e.target.value }) });
+  $('bg-opts').hidden = !e.target.value;
+});
+
+$('o-bg-opacity').addEventListener('input', function (e) {
+  $('o-bg-op-label').textContent = e.target.value;
+  var current = (state.settings.summary && state.settings.summary.background) || {};
+  saveStyle({ background: Object.assign({}, current, { opacity: Number(e.target.value) }) });
+});
+
+$('o-bg-fit').addEventListener('change', function (e) {
+  var current = (state.settings.summary && state.settings.summary.background) || {};
+  saveStyle({ background: Object.assign({}, current, { fit: e.target.value }) });
+});
+
+$('o-char-add').addEventListener('change', function (e) {
+  var file = e.target.value;
+  e.target.value = '';
+  if (!file) return;
+
+  var chars = ((state.settings.summary && state.settings.summary.characters) || []).slice();
+  if (chars.length >= 6) { window.alert('キャラ画像は6つまでです。'); return; }
+
+  var id = 'c' + Date.now().toString(36);
+  chars.push({ id: id, file: file, x: 0.82, y: 0.72, scale: 0.22 });
+  selectedChara = id;
+  saveStyle({ characters: chars });
+  renderCharacters();
+});
+
+$('images-reload').addEventListener('click', function () {
+  fetch('/api/images/reload', { method: 'POST' })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (data && data.state) { state = data.state; refreshImageOptions(); renderCharacters(); draw(); }
+    })
+    .catch(function () { /* 失敗しても表示は続く */ });
+});
+
+// ---------------------------------------------------------
+// キャラ画像をドラッグして動かす
+// ---------------------------------------------------------
+var dragging = null;
+
+/** 表示上の位置を、画像の中の座標に直す */
+function canvasPoint(event) {
+  var canvas = $('cv');
+  var rect = canvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) / rect.width * WIDTH,
+    y: (event.clientY - rect.top) / rect.height * layout.height
+  };
+}
+
+$('cv').addEventListener('mousedown', function (event) {
+  var point = canvasPoint(event);
+  // 手前にあるものから当てる
+  for (var i = layout.characters.length - 1; i >= 0; i--) {
+    var item = layout.characters[i];
+    var box = item.box;
+    if (point.x >= box.x && point.x <= box.x + box.w &&
+        point.y >= box.y && point.y <= box.y + box.h) {
+      dragging = { id: item.id, dx: point.x - (box.x + box.w / 2), dy: point.y - (box.y + box.h / 2) };
+      selectCharacter(item.id);
+      $('cv').classList.add('dragging');
+      event.preventDefault();
+      return;
+    }
+  }
+});
+
+window.addEventListener('mousemove', function (event) {
+  if (!dragging) return;
+  var point = canvasPoint(event);
+  updateCharacter(dragging.id, {
+    x: (point.x - dragging.dx) / WIDTH,
+    y: (point.y - dragging.dy) / layout.height
+  });
+});
+
+window.addEventListener('mouseup', function () {
+  if (!dragging) return;
+  dragging = null;
+  $('cv').classList.remove('dragging');
 });
 
 // フォントが読み込まれてから描き直す（文字幅がずれないように）

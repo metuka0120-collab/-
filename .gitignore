@@ -9,3 +9,5 @@ Thumbs.db
 stamps/*
 !stamps/README.txt
 data/icons/
+images/*
+!images/README.txt

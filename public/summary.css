@@ -38,3 +38,43 @@ input[type="range"] {
   margin: 2px 0 0;
 }
 .field b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* 設定欄の小見出し */
+.sec {
+  margin: 18px 0 10px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line-soft);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dim);
+  letter-spacing: .08em;
+}
+
+/* 置いたキャラ画像の一覧 */
+.char-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 8px 10px;
+  margin-bottom: 7px;
+}
+.char-row.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.char-thumb {
+  width: 34px; height: 34px; flex: none;
+  object-fit: contain;
+  background: var(--panel-3);
+  border-radius: 6px;
+}
+.char-body { flex: 1; min-width: 0; }
+.char-name {
+  font-size: 12.5px; font-weight: 700;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.char-body input[type="range"] { margin-top: 3px; }
+
+/* ドラッグできることを伝える */
+#cv { cursor: grab; }
+#cv.dragging { cursor: grabbing; }

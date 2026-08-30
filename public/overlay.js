@@ -32,6 +32,16 @@ if (!SHOW_STATS) overlay.classList.add('no-record');
 let lastCurrentId = null;
 
 /**
+ * 対戦中に「対戦中」の隣へ並べる募集状況のラベル。
+ * 対戦相手の情報しか出ていない場所なので、何の状態かひと目で分かる書き方にする。
+ */
+const MATCH_RECRUIT_TAG = {
+  open: '募集中',
+  paused: '募集ストップ中',
+  closed: '募集終了'
+};
+
+/**
  * 対戦していないときの表示。管理画面の「募集ステータス」で切り替わる。
  */
 const IDLE_TEXT = {
@@ -83,8 +93,8 @@ function render(state) {
     elTag.textContent = '対戦中';
 
     // 対戦中も募集状況が分かるようにする
-    const matchStatus = IDLE_TEXT[settings.recruit] ? settings.recruit : 'open';
-    elRecruitTag.textContent = IDLE_TEXT[matchStatus].tag;
+    const matchStatus = MATCH_RECRUIT_TAG[settings.recruit] ? settings.recruit : 'open';
+    elRecruitTag.textContent = MATCH_RECRUIT_TAG[matchStatus];
     elRecruitTag.className = 'tag tag-recruit rc-' + matchStatus;
     elRecruitTag.hidden = false;
     if (current.icon) {

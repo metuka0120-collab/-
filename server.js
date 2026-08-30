@@ -19,6 +19,7 @@ const { Store, DATA_FILE } = require('./lib/store');
 const { listStamps, STAMP_DIR } = require('./lib/stamps');
 const { OneCommeClient } = require('./lib/onecomme');
 const { cacheIcon, ICON_DIR } = require('./lib/icons');
+const { listImages, IMAGE_DIR } = require('./lib/images');
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -33,6 +34,8 @@ app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] })
 app.use('/stamps', express.static(STAMP_DIR, { index: false, dotfiles: 'ignore' }));
 // わんコメから取り込んで保存したアイコンを配る
 app.use('/icons', express.static(ICON_DIR, { index: false, dotfiles: 'ignore' }));
+// images/ に置いた背景・キャラ画像を配る
+app.use('/images', express.static(IMAGE_DIR, { index: false, dotfiles: 'ignore' }));
 
 // ---------------------------------------------------------------
 // 画面
@@ -56,6 +59,7 @@ onecomme.configure(store.data.settings.onecomme);
 function snapshot() {
   return Object.assign(store.snapshot(), {
     stamps: listStamps(),
+    images: listImages(),
     onecomme: onecomme.status(),
     commenters: onecomme.commenters()
   });
@@ -123,6 +127,13 @@ app.post('/api/stamps/reload', (req, res) => {
   const stamps = listStamps(true);
   broadcast();
   res.json({ ok: true, stamps, state: snapshot() });
+});
+
+// images/ フォルダを読み直す
+app.post('/api/images/reload', (req, res) => {
+  const images = listImages(true);
+  broadcast();
+  res.json({ ok: true, images, state: snapshot() });
 });
 
 // 配信タイトルや自分の使用デッキ
@@ -226,6 +237,7 @@ server.listen(PORT, HOST, () => {
   console.log(`  実況テロップ : http://localhost:${PORT}/ticker`);
   console.log(`  保存ファイル : ${DATA_FILE}`);
   console.log(`  スタンプ置場 : ${STAMP_DIR}`);
+  console.log(`  画像置場     : ${IMAGE_DIR}`);
   if (store.data.settings.onecomme.enabled) {
     console.log(`  わんコメ連携 : ${store.data.settings.onecomme.url}`);
   }

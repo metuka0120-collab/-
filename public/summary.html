@@ -91,6 +91,39 @@
       </label>
     </div>
 
+    <h2 class="sec">背景とキャラ画像</h2>
+    <div class="form">
+      <label class="field">
+        <span>背景画像</span>
+        <select id="o-bg"><option value="">なし</option></select>
+      </label>
+
+      <div id="bg-opts" hidden>
+        <label class="field">
+          <span>背景の濃さ <b id="o-bg-op-label">35</b> %</span>
+          <input type="range" id="o-bg-opacity" min="0" max="100" step="5" value="35">
+        </label>
+        <label class="field">
+          <span>合わせ方</span>
+          <select id="o-bg-fit">
+            <option value="cover">全体を覆う（はみ出す）</option>
+            <option value="contain">全体を入れる（余白が出る）</option>
+            <option value="tile">タイル状にしきつめる</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field">
+        <span>キャラ画像を追加</span>
+        <select id="o-char-add"><option value="">選んで追加…</option></select>
+      </label>
+
+      <div id="char-list"></div>
+      <p class="hint">キャラ画像は<strong>画像の上をドラッグ</strong>して動かせます。</p>
+
+      <button type="button" class="btn btn-ghost btn-sm" id="images-reload">↻ 画像フォルダを読み込み直す</button>
+    </div>
+
     <div class="sum-actions">
       <button type="button" class="btn btn-primary" id="download">PNG画像として保存</button>
       <button type="button" class="btn btn-ghost" id="copy">クリップボードにコピー</button>
