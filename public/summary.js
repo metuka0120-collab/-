@@ -35,7 +35,8 @@ var THEMES = {
 
 var opts = {
   day: 'today', theme: 'dark', cols: 'auto',
-  comment: true, myDeck: true, h2h: false, stamps: true, icons: true, title: '', note: ''
+  comment: true, myName: false, myDeck: false, h2h: false, stamps: true, icons: true,
+  title: '', note: ''
 };
 
 function $(id) { return document.getElementById(id); }
@@ -317,7 +318,7 @@ function draw() {
   setFont(ctx, 22, '');
   ctx.fillStyle = t.muted;
   var dateLabel = opts.day === 'all' ? '通算成績' : jpDate(opts.day);
-  var who = state.settings.myName ? '　/　' + state.settings.myName : '';
+  var who = opts.myName && state.settings.myName ? '　/　' + state.settings.myName : '';
   ctx.fillText(fit(ctx, dateLabel + who, WIDTH - pad * 2 - 430), pad, 118);
 
   if (opts.myDeck && headerMyDeck) {
@@ -538,6 +539,7 @@ $('o-theme').addEventListener('change', function (e) { opts.theme = e.target.val
 $('o-cols').addEventListener('change', function (e) { opts.cols = e.target.value; draw(); });
 $('o-comment').addEventListener('change', function (e) { opts.comment = e.target.checked; draw(); });
 $('o-mydeck').addEventListener('change', function (e) { opts.myDeck = e.target.checked; draw(); });
+$('o-myname').addEventListener('change', function (e) { opts.myName = e.target.checked; draw(); });
 $('o-h2h').addEventListener('change', function (e) { opts.h2h = e.target.checked; draw(); });
 $('o-stamps').addEventListener('change', function (e) { opts.stamps = e.target.checked; draw(); });
 $('o-icons').addEventListener('change', function (e) { opts.icons = e.target.checked; draw(); });
