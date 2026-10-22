@@ -82,7 +82,8 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
 .tag {
@@ -130,7 +131,20 @@ body {
   対戦中でも募集状況が分かるようにする小さなラベル。
   対戦していないときは大きい方のラベルが募集状況を出すので、こちらは隠す。
 */
-.tag-recruit { flex: none; letter-spacing: .06em; }
+/*
+  対戦中の募集状況。視聴者がいちばん知りたい情報なので、
+  ルームIDや成績よりはっきり大きく出す。
+*/
+.tag-recruit {
+  flex: none;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  padding: 4px 13px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
 .tag-recruit[hidden] { display: none; }
 .tag-recruit.rc-open   { background: linear-gradient(90deg, #4fe39b, #21a86a); color: #04261a; }
 .tag-recruit.rc-paused { background: linear-gradient(90deg, #ffc861, #e08c14); color: #2e1c00; }
