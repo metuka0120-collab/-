@@ -117,6 +117,9 @@ body {
   text-overflow: ellipsis;
 }
 
+.deck[hidden] { display: none; }
+.match-no[hidden] { display: none; }
+
 .deck {
   font-size: 13px;
   font-weight: 600;

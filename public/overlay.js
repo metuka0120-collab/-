@@ -12,6 +12,9 @@
 const params = new URLSearchParams(location.search);
 const SHOW_STATS = params.get('stats') !== '0';
 const SHOW_ROOM = params.get('room') !== '0';
+// デッキ名と「本日N戦目」は既定では出さない。必要なら ?deck=1 / ?count=1 で戻せる
+const SHOW_DECK = params.get('deck') === '1';
+const SHOW_COUNT = params.get('count') === '1';
 const HIDE_WHEN_IDLE = params.get('idle') === 'hide';
 
 const overlay = document.getElementById('overlay');
@@ -105,8 +108,13 @@ function render(state) {
       elIcon.removeAttribute('src');
     }
     elName.textContent = current.name || '名前未設定';
+
+    // デッキ名は既定では出さない（?deck=1 で出せる）
     elDeck.textContent = current.deck || 'デッキ未登録';
+    elDeck.hidden = !(SHOW_DECK && current.deck);
+
     elMatchNo.textContent = `本日 ${current.matchNumber} 戦目`;
+    elMatchNo.hidden = !SHOW_COUNT;
     return;
   }
 
@@ -126,8 +134,13 @@ function render(state) {
   elRecruitTag.hidden = true;
   elTag.textContent = text.tag;
   elName.textContent = text.name;
+
+  // 待機中のここはデッキ名ではなく案内文なので、そのまま出す
   elDeck.textContent = text.sub;
+  elDeck.hidden = false;
+
   elMatchNo.textContent = `本日 ${stats.total} 戦終了`;
+  elMatchNo.hidden = !SHOW_COUNT;
 
   if (HIDE_WHEN_IDLE) {
     overlay.classList.add('is-hidden');
