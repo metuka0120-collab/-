@@ -301,6 +301,8 @@ function api(method, url, body) {
 }
 
 var reconnectDelay = 500;
+// 終了ボタンを押したあとは、再接続も「未接続」の表示もしない
+var quitting = false;
 
 function connect() {
   var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -313,6 +315,7 @@ function connect() {
     if (message.type === 'state') applyState(message.payload);
   });
   socket.addEventListener('close', function () {
+    if (quitting) return;
     setConnected(false);
     setTimeout(connect, reconnectDelay);
     reconnectDelay = Math.min(reconnectDelay * 2, 5000);
@@ -773,6 +776,29 @@ $('clear-today').addEventListener('click', function () {
   if (!window.confirm('本日の対戦履歴をすべて削除します。よろしいですか？（元に戻せません）')) return;
   api('POST', '/api/history/clear-today');
 });
+
+// 黒い画面を出さずに起動したときのための終了ボタン
+$('btn-quit').addEventListener('click', function () {
+  if (!window.confirm('アプリを終了します。よろしいですか？\n\n記録は保存されます。OBSの表示も止まります。')) return;
+  quitting = true;
+  var btn = $('btn-quit');
+  btn.disabled = true;
+  btn.textContent = '終了しています…';
+  // 終了するとサーバーからの返事が途中で切れることがあるので、失敗しても終了扱いにする
+  fetch('/api/quit', { method: 'POST', headers: { 'Content-Type': 'application/json' } })
+    .catch(function () { /* 返事が来なくても終了は進んでいる */ })
+    .then(function () { setTimeout(showQuitScreen, 400); });
+});
+
+function showQuitScreen() {
+  var box = document.createElement('div');
+  box.className = 'quit-screen';
+  box.innerHTML =
+    '<h2>アプリを終了しました</h2>' +
+    '<p>記録は保存されています。このタブは閉じて大丈夫です。<br>' +
+    'もう一度使うときは「起動」をダブルクリックしてください。</p>';
+  document.body.appendChild(box);
+}
 
 // ---------------------------------------------------------
 render();

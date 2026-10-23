@@ -11,6 +11,7 @@
  * 参加者の受付・整列はワンコメなど別ツールに任せ、こちらは対戦履歴に専念する。
  */
 
+const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const express = require('express');
@@ -233,6 +234,21 @@ app.post('/api/history/clear-today', (req, res) => {
   commit(res, { removed });
 });
 
+/*
+  アプリを終了する。黒い画面を出さずに起動した場合、
+  記録画面の「アプリを終了」ボタンからここを呼んで止める。
+  よそのページから勝手に止められないよう、同じPCの画面からの操作だけ受け付ける。
+*/
+app.post('/api/quit', (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && !/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return res.status(403).json({ ok: false, error: 'この操作はこのPCの画面からのみ行えます。' });
+  }
+  res.json({ ok: true });
+  // 返事を送り切ってから落とす
+  setTimeout(shutdown, 150);
+});
+
 app.use((err, req, res, next) => {
   console.error('[server] エラー:', err.message);
   if (res.headersSent) return next(err);
@@ -242,7 +258,24 @@ app.use((err, req, res, next) => {
 // ---------------------------------------------------------------
 // 起動
 // ---------------------------------------------------------------
+const PID_FILE = path.join(path.dirname(DATA_FILE), 'app.pid');
+
+// 動いているプロセス番号を残しておく。「終了」が効かないときの保険に使う。
+function writePidFile() {
+  try {
+    fs.mkdirSync(path.dirname(PID_FILE), { recursive: true });
+    fs.writeFileSync(PID_FILE, String(process.pid), 'utf8');
+  } catch (err) {
+    console.error('[server] app.pid を書けませんでした:', err.message);
+  }
+}
+
+function removePidFile() {
+  try { fs.unlinkSync(PID_FILE); } catch (err) { /* すでに無ければ何もしない */ }
+}
+
 server.listen(PORT, HOST, () => {
+  writePidFile();
   console.log('');
   console.log('==============================================');
   console.log(' デュエル・マスターズ プレイス 配信ツール 起動');
@@ -259,7 +292,8 @@ server.listen(PORT, HOST, () => {
     console.log(`  わんコメ連携 : ${store.data.settings.onecomme.url}`);
   }
   console.log('');
-  console.log('  終了するには この画面で Ctrl + C を押してください。');
+  console.log('  終了するには この画面で Ctrl + C を押すか、');
+  console.log('  記録画面の右上「アプリを終了」を押してください。');
   console.log('');
 });
 
@@ -274,8 +308,12 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
+let shuttingDown = false;
 function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log('\n終了します。データを保存しています…');
+  removePidFile();
   clearInterval(heartbeat);
   onecomme.stop();
   try { store.saveSync(); } catch (err) { console.error('保存に失敗しました:', err.message); }
