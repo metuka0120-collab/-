@@ -23,7 +23,7 @@ const { cacheIcon, ICON_DIR } = require('./lib/icons');
 const { listImages, IMAGE_DIR } = require('./lib/images');
 
 // 画面に出すバージョン。更新したファイルで動いているか一目で分かるようにする
-const APP_VERSION = '1.1.0 (2026-10-23)';
+const APP_VERSION = '1.1.1 (2026-10-23)';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';

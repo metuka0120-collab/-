@@ -4,7 +4,11 @@
    OBS表示画面
    - WebSocketで管理画面の変更を受け取り、リロードなしで即時反映する。
    - URLパラメータ
+       ?scale=1.5  カード全体の大きさ（既定1。0.5〜3）
        ?stats=0    本日の成績（勝敗・勝率）を隠す
+       ?room=0     ルームIDを隠す
+       ?deck=1     相手のデッキ名も出す（既定は出さない）
+       ?count=1    「本日N戦目」も出す（既定は出さない）
        ?idle=hide  対戦者がいないときカードごと隠す（既定は「待機中」を表示）
        ?idle=show  対戦者がいないとき「待機中」カードを表示（既定）
    ========================================================= */
@@ -16,6 +20,8 @@ const SHOW_ROOM = params.get('room') !== '0';
 const SHOW_DECK = params.get('deck') === '1';
 const SHOW_COUNT = params.get('count') === '1';
 const HIDE_WHEN_IDLE = params.get('idle') === 'hide';
+// カードごと拡大・縮小する。OBS側で引き伸ばすよりも文字がくっきり出る。
+const SCALE = Math.min(3, Math.max(0.5, Number(params.get('scale')) || 1));
 
 const overlay = document.getElementById('overlay');
 const elName = document.getElementById('name');
@@ -31,6 +37,7 @@ const elRecLose = document.getElementById('rec-lose');
 const elRecRate = document.getElementById('rec-rate');
 
 if (!SHOW_STATS) overlay.classList.add('no-record');
+if (SCALE !== 1) overlay.style.zoom = String(SCALE);
 
 let lastCurrentId = null;
 
