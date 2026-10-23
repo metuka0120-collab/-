@@ -21,6 +21,9 @@ const { OneCommeClient } = require('./lib/onecomme');
 const { cacheIcon, ICON_DIR } = require('./lib/icons');
 const { listImages, IMAGE_DIR } = require('./lib/images');
 
+// 画面に出すバージョン。更新したファイルで動いているか一目で分かるようにする
+const APP_VERSION = '1.1.0 (2026-10-23)';
+
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
 
@@ -29,7 +32,15 @@ store.load();
 
 const app = express();
 app.use(express.json({ limit: '256kb' }));
-app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
+// 画面のHTML/CSS/JSはキャッシュさせない。
+// OBSやブラウザが古いファイルを使い続けて「更新したのに変わらない」が起きるのを防ぐ。
+const noStore = (res) => res.setHeader('Cache-Control', 'no-store, must-revalidate');
+app.use(express.static(path.join(__dirname, 'public'), {
+  extensions: ['html'],
+  etag: false,
+  lastModified: false,
+  setHeaders: noStore
+}));
 // stamps/ に置いた画像をそのまま配る
 app.use('/stamps', express.static(STAMP_DIR, { index: false, dotfiles: 'ignore' }));
 // わんコメから取り込んで保存したアイコンを配る
@@ -41,10 +52,14 @@ app.use('/images', express.static(IMAGE_DIR, { index: false, dotfiles: 'ignore' 
 // 画面
 // ---------------------------------------------------------------
 app.get('/', (req, res) => res.redirect('/admin'));
-app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
-app.get('/summary', (req, res) => res.sendFile(path.join(__dirname, 'public', 'summary.html')));
-app.get('/overlay', (req, res) => res.sendFile(path.join(__dirname, 'public', 'overlay.html')));
-app.get('/ticker', (req, res) => res.sendFile(path.join(__dirname, 'public', 'ticker.html')));
+const sendPage = (file) => (req, res) => {
+  noStore(res);
+  res.sendFile(path.join(__dirname, 'public', file));
+};
+app.get('/admin', sendPage('admin.html'));
+app.get('/summary', sendPage('summary.html'));
+app.get('/overlay', sendPage('overlay.html'));
+app.get('/ticker', sendPage('ticker.html'));
 
 // ---------------------------------------------------------------
 // WebSocket（画面どうしの即時同期）
@@ -58,6 +73,7 @@ onecomme.configure(store.data.settings.onecomme);
 
 function snapshot() {
   return Object.assign(store.snapshot(), {
+    appVersion: APP_VERSION,
     stamps: listStamps(),
     images: listImages(),
     onecomme: onecomme.status(),
@@ -230,6 +246,7 @@ server.listen(PORT, HOST, () => {
   console.log('');
   console.log('==============================================');
   console.log(' デュエル・マスターズ プレイス 配信ツール 起動');
+  console.log(`              バージョン ${APP_VERSION}`);
   console.log('==============================================');
   console.log(`  対戦記録画面 : http://localhost:${PORT}/admin`);
   console.log(`  まとめ画像   : http://localhost:${PORT}/summary`);

@@ -1,6 +1,6 @@
 {
   "name": "dmps-stream-manager",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "デュエル・マスターズ プレイス 視聴者参加型配信用 管理ツール (管理画面 + OBSオーバーレイ)",
   "main": "server.js",

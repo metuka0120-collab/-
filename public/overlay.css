@@ -149,9 +149,22 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
 }
 .tag-recruit[hidden] { display: none; }
+
+/*
+  対戦中は「対戦中」と募集状況が横に並ぶので、文字の大きさを揃える。
+  待機中の「募集中」は下の大きな文字と重なるため、小さいままにしておく。
+*/
+.overlay:not(.is-idle) .tag {
+  font-size: 24px;
+  letter-spacing: .04em;
+  line-height: 1.1;
+  padding: 4px 13px;
+  border-radius: 7px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
 .tag-recruit.rc-open   { background: linear-gradient(90deg, #4fe39b, #21a86a); color: #04261a; }
 .tag-recruit.rc-paused { background: linear-gradient(90deg, #ffc861, #e08c14); color: #2e1c00; }
-.tag-recruit.rc-closed { background: #7b8398; color: #12141b; }
+.tag-recruit.rc-closed { background: linear-gradient(90deg, #ff5a67, #cf1526); color: #fff4f5; }
 
 /* ---------- ルームID ---------- */
 .room {
@@ -223,11 +236,11 @@ body {
 .overlay.is-paused .tag { background: linear-gradient(90deg, #ffc861, #e08c14); color: #2e1c00; }
 .overlay.is-paused .deck { color: #ffd48a; }
 
-/* 募集終了：グレー */
-.overlay.is-closed .accent { background: linear-gradient(180deg, #8b93a8, #5a6178); }
-.overlay.is-closed .tag { background: #7b8398; color: #12141b; }
-.overlay.is-closed .name { color: #b9c1d4; }
-.overlay.is-closed .deck { color: #96a0b8; }
+/* 募集終了：赤。もう受け付けていないことがはっきり分かるように */
+.overlay.is-closed .accent { background: linear-gradient(180deg, #ff5a67, #cf1526); }
+.overlay.is-closed .tag { background: linear-gradient(90deg, #ff5a67, #cf1526); color: #fff4f5; }
+.overlay.is-closed .name { color: #ffd9dd; }
+.overlay.is-closed .deck { color: #ffb3bb; }
 
 /* 成績を隠す（?stats=0） */
 .overlay.no-record .record { display: none; }

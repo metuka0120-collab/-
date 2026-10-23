@@ -341,6 +341,7 @@ function applyState(next) {
 // 描画
 // ---------------------------------------------------------
 function render() {
+  renderVersion();
   mountStampPicker($('q-stamps'), ui.quickStamps);
   renderRecruit();
   renderRoom();
@@ -351,6 +352,12 @@ function render() {
   renderHistory();
   renderRankings();
   renderDatalists();
+}
+
+// --- バージョン表記（更新したファイルで動いているかの確認用） ---
+function renderVersion() {
+  var el = $('app-ver');
+  if (el) el.textContent = state.appVersion ? 'v' + state.appVersion : '';
 }
 
 // --- 対戦中 ---
