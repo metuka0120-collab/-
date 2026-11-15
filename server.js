@@ -24,7 +24,7 @@ const { listImages, IMAGE_DIR } = require('./lib/images');
 const { fontList, fontCss, FONTSOURCE_DIR } = require('./lib/fonts');
 
 // 画面に出すバージョン。更新したファイルで動いているか一目で分かるようにする
-const APP_VERSION = '1.3.1 (2026-11-15)';
+const APP_VERSION = '1.3.2 (2026-11-15)';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';

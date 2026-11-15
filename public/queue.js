@@ -7,7 +7,7 @@
    - URLパラメータ
        ?layout=band  横1行にする（画面の上や下に置く用）
        ?rows=4       パネルで参加待ちを見せる行数（入りきらなければ流れる）
-       ?speed=60     流れる速さ（1秒あたりのpx）
+       ?speed=60     流れる速さ（1秒あたりのpx。ふだんは記録画面のつまみで決める）
        ?max=20       参加待ちに並べる人数の上限（越えたら「ほか○人」。ふだんは全員）
        ?width=340    パネルの幅（px）
        ?scale=1.3    全体の大きさ
@@ -20,7 +20,14 @@ const BAND = qParams.get('layout') === 'band';
 // ふだんは全員を出す。入りきらないときは、流して全員が見えるようにする
 const MAX_CHIPS = Number(qParams.get('max')) >= 1 ? Math.min(200, Number(qParams.get('max'))) : Infinity;
 const ROWS = Math.min(20, Math.max(1, Number(qParams.get('rows')) || 4));
-const SPEED = Math.min(400, Math.max(5, Number(qParams.get('speed')) || (BAND ? 60 : 24)));
+// 流れる速さ。URLで指定したときはそれを使い、なければ記録画面のつまみ（%）で決める
+const URL_SPEED = Number(qParams.get('speed')) ? Math.min(400, Math.max(5, Number(qParams.get('speed')))) : 0;
+const BASE_SPEED = BAND ? 60 : 24;
+let speedPercent = 100;
+
+function currentSpeed() {
+  return URL_SPEED || BASE_SPEED * speedPercent / 100;
+}
 const HIDE_EMPTY = qParams.get('empty') === 'hide';
 const Q_SCALE = Math.min(3, Math.max(0.5, Number(qParams.get('scale')) || 1));
 const Q_WIDTH = Number(qParams.get('width'));
@@ -83,6 +90,8 @@ function render(state) {
   elNext.hidden = !picked.length;
 
   // 参加待ち
+  const percent = Number(config.speed);
+  speedPercent = percent >= 25 && percent <= 300 ? percent : 100;
   elWait.hidden = !waiting.length;
   waitingNow = waiting;
   buildChips();
@@ -139,7 +148,7 @@ function buildChips(force) {
   const root = getComputedStyle(document.documentElement);
   const key = waitingNow.map((e) => e.id + ':' + e.name).join('|') + '@' +
     document.body.className + root.getPropertyValue('--font-label') + root.getPropertyValue('--ls') +
-    '@' + elChips.clientWidth;
+    '@' + elChips.clientWidth + '@' + currentSpeed();
   if (!force && key === chipsKey) return;
   chipsKey = key;
 
@@ -177,7 +186,7 @@ function buildChips(force) {
   elTrack.appendChild(second);
   shift += BAND ? spacer.offsetWidth : spacer.offsetHeight;
 
-  const duration = shift / SPEED;
+  const duration = shift / currentSpeed();
   elChips.classList.add('scrolling');
   elTrack.style.setProperty('--shift', shift + 'px');
   void elTrack.offsetWidth;

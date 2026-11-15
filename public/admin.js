@@ -420,6 +420,13 @@ function renderQueue() {
     $('q-onlyopen').checked = config.onlyWhenOpen !== false;
     $('q-pickcount').value = String(config.pickCount || 3);
   }
+  // 流れる速さ（動かしている最中は上書きしない）
+  var speed = Number(config.speed) || 100;
+  if (document.activeElement !== $('q-speed')) {
+    $('q-speed').value = speed;
+    $('q-speed-label').textContent = speedLabel(speed);
+  }
+
   var count = config.pickCount || 3;
   var pickedCount = queue.filter(function (e) { return e.pick > 0; }).length;
   var full = queue.length > 0 && pickedCount >= Math.min(count, queue.length);
@@ -487,6 +494,12 @@ function renderQueue() {
   box.innerHTML = html;
   var next = box.querySelector('.q-list');
   if (next && keep) next.scrollTop = keep;
+}
+
+function speedLabel(value) {
+  var v = Number(value);
+  if (v === 100) return '100%（標準）';
+  return v + '%（' + (v < 100 ? 'ゆっくり' : '速め') + '）';
 }
 
 function queueEntry(id) {
@@ -1040,6 +1053,16 @@ $('q-toggle').addEventListener('click', function () {
 ['q-autojoin', 'q-joinwords', 'q-cancelwords', 'q-onlyopen', 'q-pickcount'].forEach(function (id) {
   $(id).addEventListener('input', function () { ui.qDirty = true; });
   $(id).addEventListener('change', function () { ui.qDirty = true; });
+});
+
+// 流れる速さは「保存」を待たずにすぐ反映する
+var speedTimer = null;
+$('q-speed').addEventListener('input', function (e) {
+  $('q-speed-label').textContent = speedLabel(e.target.value);
+  clearTimeout(speedTimer);
+  speedTimer = setTimeout(function () {
+    api('PUT', '/api/settings', { queue: { speed: Number(e.target.value) } });
+  }, 250);
 });
 
 $('q-save').addEventListener('click', function () {
