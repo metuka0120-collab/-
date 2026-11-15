@@ -6,6 +6,9 @@
    本日の対戦と参加待ちの人を、右から左へ順番に流し続ける。
    管理画面で対戦を記録したり、参加希望が来たりすると、リロードなしでその場に加わる。
 
+   ふだんの設定（流すもの・速さ・左の成績）は、記録画面の「実況テロップ」欄で変える。
+   URLで指定したものは、記録画面の設定より優先される。
+
    URLパラメータ
      ?speed=70      流れる速さ（1秒あたりのピクセル数・既定70）
      ?bg=none       帯の下地を消して完全に透明にする
@@ -17,8 +20,9 @@
    ========================================================= */
 
 var params = new URLSearchParams(location.search);
-var SPEED = Math.min(400, Math.max(10, Number(params.get('speed')) || 70));
-var SHOW_HEAD = params.get('head') !== '0';
+var URL_SPEED = Number(params.get('speed')) ? Math.min(400, Math.max(10, Number(params.get('speed')))) : 0;
+var BASE_SPEED = 70;
+var URL_HEAD = params.get('head');   // '0' / '1' / null（記録画面の設定に従う）
 var ONLY_COMMENT = params.get('only') === 'comment';
 var ONLY_QUEUE = params.get('only') === 'queue';
 var URL_QUEUE = params.get('queue');   // '0' / '1' / null（記録画面の設定に従う）
@@ -37,7 +41,29 @@ var elHWin = document.getElementById('h-win');
 var elHLose = document.getElementById('h-lose');
 
 bar.classList.toggle('has-bg', !NO_BG);
-bar.classList.toggle('no-head', !SHOW_HEAD);
+
+/** 記録画面の「実況テロップ」欄の設定 */
+function tickerConfig() {
+  return (state.settings && state.settings.ticker) || {};
+}
+
+/** 流れる速さ（1秒あたりのpx）。URLの指定があればそれ、なければ記録画面のつまみ（%） */
+function currentSpeed() {
+  if (URL_SPEED) return URL_SPEED;
+  var percent = Number(tickerConfig().speed);
+  return BASE_SPEED * (percent >= 25 && percent <= 300 ? percent : 100) / 100;
+}
+
+function headOn() {
+  if (URL_HEAD === '0') return false;
+  if (URL_HEAD === '1') return true;
+  return tickerConfig().head !== false;
+}
+
+function resultsOn() {
+  if (ONLY_QUEUE) return false;
+  return tickerConfig().results !== false;
+}
 
 var state = { history: [], stats: {}, stamps: [] };
 var setWidth = 0;   // 1周ぶんの幅
@@ -64,7 +90,7 @@ function findStamp(id) {
 
 /** 流す対象（本日ぶん・古い順） */
 function targets() {
-  if (ONLY_QUEUE) return [];
+  if (!resultsOn()) return [];
   var key = todayKey();
   var rows = key ? (state.history || []).filter(function (h) { return h.date === key; }) : [];
   if (ONLY_COMMENT) rows = rows.filter(function (h) { return h.comment; });
@@ -99,8 +125,7 @@ function queueOn() {
   if (ONLY_QUEUE) return true;
   if (URL_QUEUE === '0') return false;
   if (URL_QUEUE === '1') return true;
-  var config = (state.settings && state.settings.queue) || {};
-  return config.ticker !== false;
+  return tickerConfig().queue !== false;
 }
 
 /** 参加待ちの1かたまり（選ばれた人 → 来た順） */
@@ -141,7 +166,6 @@ function queueHtml() {
 /** 流す並び（参加待ち → 対戦結果4件 → 参加待ち → …） */
 function cycleHtml(rows) {
   var q = queueHtml();
-  if (ONLY_QUEUE) return q;
   if (!rows.length) return q;
   var html = '';
   rows.forEach(function (h, i) {
@@ -205,7 +229,7 @@ function startScroll(fromProgress) {
     track.style.animation = 'none';
     return;
   }
-  var duration = setWidth / SPEED;
+  var duration = setWidth / currentSpeed();
   track.style.setProperty('--shift', setWidth + 'px');
 
   // いったん止めてから掛け直さないと、同じ設定では再生し直されない
@@ -217,10 +241,12 @@ function startScroll(fromProgress) {
 
 /** 中身が変わったときだけ組み立て直す */
 function refresh() {
+  // 左の成績を出すかどうかで流れる幅が変わるので、先に決めてから測る
+  bar.classList.toggle('no-head', !headOn());
   var rows = targets();
   var key = rows.map(function (h) {
     return [h.id, h.result, h.name, h.deck, h.comment, h.icon, (h.stamps || []).join('/')].join('|');
-  }).join('#') + '@' + win.clientWidth + '@' + queueHtml();
+  }).join('#') + '@' + win.clientWidth + '@' + queueHtml() + '@' + currentSpeed();
 
   if (key === lastKey) {
     elHWin.textContent = (state.stats && state.stats.wins) || 0;

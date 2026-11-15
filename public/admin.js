@@ -370,6 +370,7 @@ function applyState(next) {
 function render() {
   renderVersion();
   renderOverlayDesign();
+  renderTicker();
   renderQueue();
   mountStampPicker($('q-stamps'), ui.quickStamps);
   renderRecruit();
@@ -420,9 +421,6 @@ function renderQueue() {
     $('q-onlyopen').checked = config.onlyWhenOpen !== false;
     $('q-pickcount').value = String(config.pickCount || 3);
   }
-  // 実況テロップにも流すか（すぐ反映するので、書きかけ中かどうかに関係なく合わせる）
-  $('q-ticker').checked = config.ticker !== false;
-
   // 流れる速さ（動かしている最中は上書きしない）
   var speed = Number(config.speed) || 100;
   if (document.activeElement !== $('q-speed')) {
@@ -497,6 +495,19 @@ function renderQueue() {
   box.innerHTML = html;
   var next = box.querySelector('.q-list');
   if (next && keep) next.scrollTop = keep;
+}
+
+// --- 実況テロップ（画面下の帯） ---
+function renderTicker() {
+  var config = (state.settings && state.settings.ticker) || {};
+  $('tk-results').checked = config.results !== false;
+  $('tk-queue').checked = config.queue !== false;
+  $('tk-head').checked = config.head !== false;
+  var speed = Number(config.speed) || 100;
+  if (document.activeElement !== $('tk-speed')) {
+    $('tk-speed').value = speed;
+    $('tk-speed-label').textContent = speedLabel(speed);
+  }
 }
 
 function speedLabel(value) {
@@ -1058,9 +1069,22 @@ $('q-toggle').addEventListener('click', function () {
   $(id).addEventListener('change', function () { ui.qDirty = true; });
 });
 
-// 実況テロップにも流すかどうかは「保存」を待たずにすぐ反映する
-$('q-ticker').addEventListener('change', function (e) {
-  api('PUT', '/api/settings', { queue: { ticker: e.target.checked } });
+// 実況テロップの設定は、どれも「保存」を待たずにすぐ反映する
+[['tk-results', 'results'], ['tk-queue', 'queue'], ['tk-head', 'head']].forEach(function (pair) {
+  $(pair[0]).addEventListener('change', function (e) {
+    var patch = {};
+    patch[pair[1]] = e.target.checked;
+    api('PUT', '/api/settings', { ticker: patch });
+  });
+});
+
+var tickerSpeedTimer = null;
+$('tk-speed').addEventListener('input', function (e) {
+  $('tk-speed-label').textContent = speedLabel(e.target.value);
+  clearTimeout(tickerSpeedTimer);
+  tickerSpeedTimer = setTimeout(function () {
+    api('PUT', '/api/settings', { ticker: { speed: Number(e.target.value) } });
+  }, 250);
 });
 
 // 流れる速さは「保存」を待たずにすぐ反映する

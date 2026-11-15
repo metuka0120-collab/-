@@ -594,3 +594,4 @@ select { cursor: pointer; }
 .q-add { display: flex; gap: 6px; margin-top: 10px; }
 .q-add input { flex: 1; min-width: 0; }
 .q-now { font-style: normal; color: var(--dim); font-size: 11px; margin-left: 2px; }
+#tk-card code { background: var(--panel-3); padding: 1px 5px; border-radius: 4px; font-size: 11.5px; }

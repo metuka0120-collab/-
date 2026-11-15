@@ -184,6 +184,21 @@
       <p class="hint">大きくしたときは、OBSのブラウザソースの幅と高さも広げてください。</p>
     </section>
 
+    <section class="card" id="tk-card">
+      <h2>実況テロップ（画面下の帯）<span class="count">OBS表示</span></h2>
+      <div class="form">
+        <label class="check"><input type="checkbox" id="tk-results"> 対戦結果と感想を流す</label>
+        <label class="check"><input type="checkbox" id="tk-queue"> 参加待ちを流す</label>
+        <label class="check"><input type="checkbox" id="tk-head"> 左はしに本日の成績（WIN / LOSE）を出す</label>
+        <label class="field">
+          <span>流れる速さ <b id="tk-speed-label">100%（標準）</b></span>
+          <input type="range" id="tk-speed" min="25" max="300" step="5" value="100">
+        </label>
+      </div>
+      <p class="hint">どれも、変えるとすぐOBSに反映されます。OBSのURLは <code>http://localhost:3000/ticker</code> のままでOKです。</p>
+      <p class="hint">URLに <code>?only=</code> や <code>?speed=</code> などを付けたソースは、URLの指定が優先されます。</p>
+    </section>
+
   </div>
 
   <!-- 右：ワンコメ取り込み + 履歴 -->
@@ -247,7 +262,6 @@
             </label>
             <button type="button" class="btn btn-primary btn-sm q-save" id="q-save">保存</button>
           </div>
-          <label class="check"><input type="checkbox" id="q-ticker"> 参加待ちを実況テロップ（画面下の帯）にも流す<em class="q-now">（すぐ反映）</em></label>
           <label class="field">
             <span>参加待ちテロップが流れる速さ <b id="q-speed-label">100%（標準）</b><em>（動かすとすぐOBSに反映）</em></span>
             <input type="range" id="q-speed" min="25" max="300" step="5" value="100">
