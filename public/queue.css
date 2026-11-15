@@ -48,8 +48,34 @@
   100% { transform: scale(1); }
 }
 
-/* 参加待ち */
-.q-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+/* 参加待ち（入りきらないときは流れる） */
+.q-chips { overflow: hidden; position: relative; }
+.q-track { will-change: transform; }
+.q-set { display: flex; flex-wrap: wrap; gap: 5px; }
+.q-gap { height: 14px; }
+/* 流れているときは、はしを少しぼかして「続きがある」ことを伝える */
+.q-chips.scrolling {
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+          mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+}
+@keyframes q-scroll-y {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(-1 * var(--shift, 0px))); }
+}
+@keyframes q-scroll-x {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-1 * var(--shift, 0px))); }
+}
+/* 順番の数字 */
+.q-ord {
+  display: inline-block;
+  min-width: 1.1em;
+  margin-right: 5px;
+  font-size: .82em;
+  text-align: center;
+  opacity: .6;
+  font-variant-numeric: tabular-nums;
+}
 .q-chip {
   font-family: var(--font-label, inherit);
   font-size: calc(13px * var(--ls, 1));
@@ -92,7 +118,14 @@
 .qband .q-next + .q-wait { margin: 0; padding: 0 0 0 14px; border-top: none; border-left: 1px dashed var(--q-line, rgba(255, 255, 255, .25)); }
 .qband .q-picks { flex-direction: row; gap: 12px; }
 .qband .q-picks .name { font-size: calc(18px * var(--ns, 1)); }
-.qband .q-chips { flex-wrap: nowrap; overflow: hidden; }
+.qband .q-chips { flex: 1; min-width: 0; }
+.qband .q-track { display: flex; width: max-content; }
+.qband .q-set { flex-wrap: nowrap; }
+.qband .q-gap { width: 40px; height: auto; }
+.qband .q-chips.scrolling {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 28px), transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 18px, #000 calc(100% - 28px), transparent 100%);
+}
 .qband .q-wait { flex: 1; }
 
 /* ---------- テーマごとの色 ---------- */

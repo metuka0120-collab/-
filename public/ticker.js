@@ -127,10 +127,11 @@ function currentProgress() {
   if (!list.length) return 0;
 
   var anim = list[0];
-  var duration = anim.effect && anim.effect.getTiming ? anim.effect.getTiming().duration : 0;
-  var at = anim.currentTime;
-  if (!duration || typeof at !== 'number') return 0;
-  return (((at % duration) + duration) % duration) / duration;
+  if (!anim.effect || !anim.effect.getComputedTiming) return 0;
+  // 開始を前にずらしている（animation-delay がマイナス）ぶんも含めた、本当の位置。
+  // currentTime だけで計算すると、続けて組み立て直したときに最初へ戻ってしまう
+  var progress = anim.effect.getComputedTiming().progress;
+  return typeof progress === 'number' ? progress : 0;
 }
 
 /** 流れる動きを開始する。1周ぶんの幅を SPEED で割った時間をかけて1周する */

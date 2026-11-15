@@ -6,7 +6,9 @@
    - シャッフルしたときは、名前がくるくる回ってから止まる
    - URLパラメータ
        ?layout=band  横1行にする（画面の上や下に置く用）
-       ?max=12       参加待ちに並べる人数の上限（越えたら「ほか○人」）
+       ?rows=4       パネルで参加待ちを見せる行数（入りきらなければ流れる）
+       ?speed=60     流れる速さ（1秒あたりのpx）
+       ?max=20       参加待ちに並べる人数の上限（越えたら「ほか○人」。ふだんは全員）
        ?width=340    パネルの幅（px）
        ?scale=1.3    全体の大きさ
        ?empty=hide   誰もいないときは隠す
@@ -15,7 +17,10 @@
 
 const qParams = new URLSearchParams(location.search);
 const BAND = qParams.get('layout') === 'band';
-const MAX_CHIPS = Math.min(50, Math.max(1, Number(qParams.get('max')) || (BAND ? 8 : 12)));
+// ふだんは全員を出す。入りきらないときは、流して全員が見えるようにする
+const MAX_CHIPS = Number(qParams.get('max')) >= 1 ? Math.min(200, Number(qParams.get('max'))) : Infinity;
+const ROWS = Math.min(20, Math.max(1, Number(qParams.get('rows')) || 4));
+const SPEED = Math.min(400, Math.max(5, Number(qParams.get('speed')) || (BAND ? 60 : 24)));
 const HIDE_EMPTY = qParams.get('empty') === 'hide';
 const Q_SCALE = Math.min(3, Math.max(0.5, Number(qParams.get('scale')) || 1));
 const Q_WIDTH = Number(qParams.get('width'));
@@ -27,6 +32,7 @@ const elNext = document.getElementById('q-next');
 const elPicks = document.getElementById('q-picks');
 const elWait = document.getElementById('q-wait');
 const elChips = document.getElementById('q-chips');
+const elTrack = document.getElementById('q-track');
 const elEmpty = document.getElementById('q-empty');
 
 if (BAND) panel.classList.replace('qpanel', 'qband');
@@ -77,10 +83,9 @@ function render(state) {
   elNext.hidden = !picked.length;
 
   // 参加待ち
-  elChips.textContent = '';
-  waiting.slice(0, MAX_CHIPS).forEach((e) => elChips.appendChild(el('span', 'q-chip', e.name)));
-  if (waiting.length > MAX_CHIPS) elChips.appendChild(el('span', 'q-chip more', 'ほか ' + (waiting.length - MAX_CHIPS) + '人'));
   elWait.hidden = !waiting.length;
+  waitingNow = waiting;
+  buildChips();
 
   // 誰もいないときの案内
   const joinWord = (config.joinWords || [])[0] || '参加希望';
@@ -98,6 +103,94 @@ function render(state) {
   }
   lastShuffleId = meta.shuffleId;
 }
+
+// ---------------------------------------------------------
+// 参加待ちの名前を並べる（入りきらないときは流す）
+// ---------------------------------------------------------
+let waitingNow = [];
+let chipsKey = '';
+
+/** 名前1つ分（順番の数字つき。自分が何番目か分かるように） */
+function chip(entry, index) {
+  const node = el('span', 'q-chip');
+  node.appendChild(el('span', 'q-ord', String(index + 1)));
+  node.appendChild(document.createTextNode(entry.name));
+  return node;
+}
+
+function chipSet(list) {
+  const set = el('div', 'q-set');
+  list.slice(0, MAX_CHIPS).forEach((e, i) => set.appendChild(chip(e, i)));
+  if (list.length > MAX_CHIPS) set.appendChild(el('span', 'q-chip more', 'ほか ' + (list.length - MAX_CHIPS) + '人'));
+  return set;
+}
+
+/** 流れている位置（0〜1）。作り直しても同じ位置から続けるために使う */
+function scrollProgress() {
+  const anim = elTrack.getAnimations ? elTrack.getAnimations()[0] : null;
+  if (!anim || !anim.effect) return 0;
+  // 開始を前にずらしている（animation-delay がマイナス）ぶんも含めた、本当の位置
+  const progress = anim.effect.getComputedTiming().progress;
+  return typeof progress === 'number' ? progress : 0;
+}
+
+/** 中身や見た目が変わったときだけ並べ直す（流れが毎回最初に戻らないように） */
+function buildChips(force) {
+  const root = getComputedStyle(document.documentElement);
+  const key = waitingNow.map((e) => e.id + ':' + e.name).join('|') + '@' +
+    document.body.className + root.getPropertyValue('--font-label') + root.getPropertyValue('--ls') +
+    '@' + elChips.clientWidth;
+  if (!force && key === chipsKey) return;
+  chipsKey = key;
+
+  const progress = scrollProgress();
+  elTrack.style.animation = 'none';
+  elTrack.textContent = '';
+  elChips.classList.remove('scrolling');
+  elChips.style.maxHeight = '';
+  if (!waitingNow.length) return;
+
+  const first = chipSet(waitingNow);
+  elTrack.appendChild(first);
+
+  // 入りきるかどうか
+  let shift = 0;
+  if (BAND) {
+    if (first.scrollWidth > elChips.clientWidth + 1) shift = first.scrollWidth;
+  } else {
+    const one = first.firstElementChild;
+    const rowH = one ? one.offsetHeight : 0;
+    const gap = parseFloat(getComputedStyle(first).rowGap) || 0;
+    const maxH = rowH * ROWS + gap * (ROWS - 1);
+    if (rowH && first.offsetHeight > maxH + 1) {
+      elChips.style.maxHeight = maxH + 'px';
+      shift = first.offsetHeight;
+    }
+  }
+  if (!shift) return;
+
+  // 同じ並びをもう1つつなげて、切れ目なく流す
+  const spacer = el('div', 'q-gap');
+  const second = chipSet(waitingNow);
+  second.setAttribute('aria-hidden', 'true');
+  elTrack.appendChild(spacer);
+  elTrack.appendChild(second);
+  shift += BAND ? spacer.offsetWidth : spacer.offsetHeight;
+
+  const duration = shift / SPEED;
+  elChips.classList.add('scrolling');
+  elTrack.style.setProperty('--shift', shift + 'px');
+  void elTrack.offsetWidth;
+  elTrack.style.animation = (BAND ? 'q-scroll-x ' : 'q-scroll-y ') + duration.toFixed(3) + 's linear infinite';
+  elTrack.style.animationDelay = (-(progress || 0) * duration).toFixed(3) + 's';
+}
+
+// 文字の形（フォント）が届くと幅が変わるので、測り直す
+if (document.fonts) {
+  document.fonts.addEventListener('loadingdone', () => buildChips(true));
+  document.fonts.ready.then(() => buildChips(true));
+}
+window.addEventListener('resize', () => buildChips());
 
 /**
  * ルーレットの演出。選ばれた人の名前の欄で、ほかの人の名前を次々に出し、
