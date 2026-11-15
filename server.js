@@ -24,7 +24,7 @@ const { listImages, IMAGE_DIR } = require('./lib/images');
 const { fontList, fontCss, FONTSOURCE_DIR } = require('./lib/fonts');
 
 // 画面に出すバージョン。更新したファイルで動いているか一目で分かるようにする
-const APP_VERSION = '1.2.0 (2026-11-15)';
+const APP_VERSION = '1.3.0 (2026-11-15)';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -80,6 +80,7 @@ app.get('/admin', sendPage('admin.html'));
 app.get('/summary', sendPage('summary.html'));
 app.get('/overlay', sendPage('overlay.html'));
 app.get('/ticker', sendPage('ticker.html'));
+app.get('/queue', sendPage('queue.html'));
 
 // ---------------------------------------------------------------
 // WebSocket（画面どうしの即時同期）
@@ -89,6 +90,20 @@ const wss = new WebSocketServer({ server, path: '/ws' });
 
 // わんコメ（OneComme）との接続。状態が動いたら画面に流す
 const onecomme = new OneCommeClient(function () { broadcast(); });
+
+// 「参加希望」「辞退」のコメントで、参加待ちリストを自動で出し入れする
+onecomme.onComment = function (person) {
+  const result = store.handleComment(person);
+  if (!result) return false;
+  if (result.action === 'join') {
+    console.log('[参加受付] ' + result.entry.name + ' さんが参加希望');
+    attachIcon(result.entry, person.profileImage);
+  } else {
+    console.log('[参加受付] ' + result.entry.name + ' さんが辞退');
+  }
+  store.save();
+  return true; // 画面を更新する
+};
 onecomme.configure(store.data.settings.onecomme);
 
 function snapshot() {
@@ -251,6 +266,54 @@ app.delete('/api/history/:id', (req, res) => {
 app.post('/api/history/clear-today', (req, res) => {
   const removed = store.clearToday();
   commit(res, { removed });
+});
+
+// ---------- 参加待ちリスト ----------
+
+// 手で追加する
+app.post('/api/queue', (req, res) => {
+  const body = req.body || {};
+  const { entry, added } = store.queueAdd({ name: body.name, source: 'manual' });
+  if (!entry) return badRequest(res, 'リスナー名を入力してください。');
+  if (!added) return badRequest(res, entry.name + ' さんは、もうリストに入っています。');
+  commit(res, { entry }, 201);
+});
+
+// リストから外す
+app.delete('/api/queue/:id', (req, res) => {
+  const entry = store.queueTake({ id: req.params.id });
+  if (!entry) return notFound(res, 'リストに見つかりません。');
+  commit(res, { removed: entry });
+});
+
+// リストを空にする
+app.post('/api/queue/clear', (req, res) => {
+  const removed = store.queueClear();
+  commit(res, { removed });
+});
+
+// 無作為に選ぶ（mode: fill … 足りない人数だけ / all … 選び直す）
+app.post('/api/queue/shuffle', (req, res) => {
+  const body = req.body || {};
+  if (!store.data.queue.length) return badRequest(res, '参加待ちの人がいません。');
+  const picked = store.queueShuffle(Number(body.count), body.mode === 'all' ? 'all' : 'fill');
+  commit(res, { picked });
+});
+
+// 選ばれた状態をやめる（リストには残す）
+app.post('/api/queue/:id/unpick', (req, res) => {
+  const entry = store.queueUnpick(req.params.id);
+  if (!entry) return notFound(res, 'リストに見つかりません。');
+  commit(res, { entry });
+});
+
+// リストの人と対戦を始める
+app.post('/api/queue/:id/start', (req, res) => {
+  const entry = store.data.queue.find((e) => e.id === req.params.id);
+  if (!entry) return notFound(res, 'リストに見つかりません。');
+  if (store.data.current) return badRequest(res, '対戦中です。いまの対戦を終えるか取り消してから始めてください。');
+  const current = store.startMatch({ name: entry.name, icon: entry.icon, listenerId: entry.listenerId, queueId: entry.id });
+  commit(res, { current }, 201);
 });
 
 /*

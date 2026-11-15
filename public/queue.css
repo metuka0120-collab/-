@@ -1,0 +1,129 @@
+/* =========================================================
+   参加待ちのテロップ（OBSのブラウザソース用）
+   見た目は OBS表示（overlay.css）のテーマをそのまま使い、
+   ここではリストの並べ方と、テーマごとの細かい色だけを決める。
+   ========================================================= */
+
+/* ---------- パネル（標準） ---------- */
+.overlay.qpanel {
+  display: block;
+  box-sizing: border-box;
+  width: var(--qw, 340px);
+  min-width: 0;
+  max-width: none;
+}
+.qpanel .body { padding: 11px 16px 13px; }
+.qpanel .head { justify-content: space-between; margin-bottom: 8px; }
+.qpanel .tag { font-size: calc(13px * var(--ls, 1)); padding: 3px 10px; }
+
+.q-total { font-size: calc(13px * var(--ls, 1)); color: var(--q-sub, #c6cfe4); white-space: nowrap; }
+.q-total b { font-size: calc(22px * var(--ls, 1)); color: var(--q-strong, #ffffff); margin: 0 2px; }
+
+.q-label {
+  font-size: calc(11px * var(--ls, 1));
+  font-weight: 700;
+  letter-spacing: .12em;
+  color: var(--q-sub, #c6cfe4);
+  margin: 6px 0 5px;
+}
+
+/* 次の対戦者 */
+.q-picks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.q-picks li { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.q-num {
+  flex: none;
+  width: calc(28px * var(--ls, 1)); height: calc(28px * var(--ls, 1));
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: calc(15px * var(--ls, 1)); font-weight: 800;
+  background: var(--q-num-bg, #ffc43d); color: var(--q-num-fg, #2a1d00);
+  border: var(--q-num-bd, none);
+}
+.q-picks .name { flex: 1; min-width: 0; }
+/* シャッフル中は名前がくるくる変わる */
+.q-picks li.rolling .name { opacity: .75; filter: blur(.3px); }
+.q-picks li.landed .name { animation: q-land .5s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes q-land {
+  0%   { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+/* 参加待ち */
+.q-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.q-chip {
+  font-family: var(--font-label, inherit);
+  font-size: calc(13px * var(--ls, 1));
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--q-chip-bg, rgba(255, 255, 255, .12));
+  color: var(--q-chip-fg, #eef1f8);
+  border: var(--q-chip-bd, none);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.q-chip.more { background: transparent; border: none; color: var(--q-sub, #c6cfe4); }
+
+.q-empty {
+  font-size: calc(14px * var(--ls, 1));
+  font-weight: 700;
+  color: var(--q-strong, #ffffff);
+  line-height: 1.5;
+  margin-top: 2px;
+}
+
+.q-next[hidden], .q-wait[hidden], .q-empty[hidden] { display: none; }
+.q-next + .q-wait { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--q-line, rgba(255, 255, 255, .2)); }
+
+/* ---------- 横1行（?layout=band：画面の上や下に置く用） ---------- */
+.overlay.qband {
+  display: flex;
+  box-sizing: border-box;
+  width: calc(100% - 10px);
+  max-width: none;
+  min-width: 0;
+}
+.qband .body { display: flex; align-items: center; gap: 14px; padding: 7px 14px; width: 100%; min-width: 0; }
+.qband .head { margin: 0; flex: none; }
+.qband .q-label { margin: 0; flex: none; }
+.qband .q-next, .qband .q-wait { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.qband .q-next + .q-wait { margin: 0; padding: 0 0 0 14px; border-top: none; border-left: 1px dashed var(--q-line, rgba(255, 255, 255, .25)); }
+.qband .q-picks { flex-direction: row; gap: 12px; }
+.qband .q-picks .name { font-size: calc(18px * var(--ns, 1)); }
+.qband .q-chips { flex-wrap: nowrap; overflow: hidden; }
+.qband .q-wait { flex: 1; }
+
+/* ---------- テーマごとの色 ---------- */
+body.th-pop {
+  --q-sub: #6E6587; --q-strong: #2B2340; --q-line: rgba(43, 35, 64, .4);
+  --q-num-bg: #FFE27A; --q-num-fg: #2B2340; --q-num-bd: 2.5px solid #2B2340;
+  --q-chip-bg: #FFFFFF; --q-chip-fg: #2B2340; --q-chip-bd: 2px solid #2B2340;
+}
+body.th-yume {
+  --q-sub: #9A7DB8; --q-strong: #6A4A8C; --q-line: rgba(201, 160, 255, .7);
+  --q-num-bg: linear-gradient(135deg, #C9A0FF, #FF9CCB); --q-num-fg: #FFFFFF;
+  --q-chip-bg: rgba(255, 255, 255, .85); --q-chip-fg: #6A4A8C; --q-chip-bd: 1.5px solid #F5C6E4;
+}
+body.th-note {
+  --q-sub: #5D6B7E; --q-strong: #2F3A4A; --q-line: rgba(47, 58, 74, .35);
+  --q-num-bg: transparent; --q-num-fg: #E2483D; --q-num-bd: 2px solid #E2483D;
+  --q-chip-bg: rgba(255, 214, 102, .55); --q-chip-fg: #2F3A4A;
+}
+body.th-note .q-chip { border-radius: 2px; }
+body.th-retro {
+  --q-sub: #B9B4E0; --q-strong: #FFFFFF; --q-line: rgba(255, 255, 255, .45);
+  --q-num-bg: #FFD93D; --q-num-fg: #120F26;
+  --q-chip-bg: #FFFFFF; --q-chip-fg: #1E1840;
+}
+body.th-retro .q-num, body.th-retro .q-chip { border-radius: 0; }
+body.th-chic {
+  --q-sub: #6F675C; --q-strong: #26231F; --q-line: #D3C8B5;
+  --q-num-bg: transparent; --q-num-fg: #94703F; --q-num-bd: 1px solid #94703F;
+  --q-chip-bg: transparent; --q-chip-fg: #26231F; --q-chip-bd: 1px solid #D3C8B5;
+}
+body.th-chic .q-chip { border-radius: 1px; }
+body.th-classic {
+  --q-num-bg: linear-gradient(135deg, #45b6ff, #a45cff); --q-num-fg: #08111f;
+}

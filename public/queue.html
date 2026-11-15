@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参加待ち | デュエマプレイス 参加型配信ツール</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
+<link rel="stylesheet" href="/overlay.css">
+<link rel="stylesheet" href="/queue.css">
+</head>
+<body>
+
+<div id="qpanel" class="overlay qpanel is-idle is-open is-hidden">
+  <div class="body">
+    <div class="head">
+      <span class="tag" id="q-status">参加受付中</span>
+      <span class="q-total">待ち <b id="q-total">0</b> 人</span>
+    </div>
+
+    <div class="q-next" id="q-next" hidden>
+      <div class="q-label">次の対戦者</div>
+      <ol class="q-picks" id="q-picks"></ol>
+    </div>
+
+    <div class="q-wait" id="q-wait" hidden>
+      <div class="q-label">参加待ち</div>
+      <div class="q-chips" id="q-chips"></div>
+    </div>
+
+    <div class="q-empty" id="q-empty" hidden></div>
+  </div>
+</div>
+
+<script src="/font-list.js"></script>
+<script src="/obs-design.js"></script>
+<script src="/queue.js"></script>
+</body>
+</html>

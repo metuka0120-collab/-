@@ -15,6 +15,7 @@
     <a class="link" href="/summary" target="_blank" rel="noopener">まとめ画像をつくる</a>
     <a class="link" href="/overlay" target="_blank" rel="noopener">OBS表示画面</a>
     <a class="link" href="/ticker" target="_blank" rel="noopener">実況テロップ</a>
+    <a class="link" href="/queue" target="_blank" rel="noopener">参加待ちテロップ</a>
     <span id="conn" class="conn conn-off">接続中…</span>
     <button type="button" class="btn-quit" id="btn-quit" title="アプリを終了します">アプリを終了</button>
   </div>
@@ -215,6 +216,54 @@
 
       <div id="oc-picked" hidden></div>
       <div id="oc-list"></div>
+    </section>
+
+    <section class="card" id="q-card">
+      <h2>
+        参加待ちリスト <span class="count" id="q-count">0</span>
+        <span class="oc-state" id="q-auto">自動受付</span>
+        <button type="button" class="btn btn-ghost btn-sm" id="q-toggle" style="margin-left:auto">設定</button>
+      </h2>
+
+      <div id="q-settings" hidden>
+        <div class="form q-settings">
+          <label class="check"><input type="checkbox" id="q-autojoin"> わんコメのコメントで自動で受け付ける</label>
+          <label class="field">
+            <span>参加の言葉<em>（この言葉を含むコメントでリストに入ります。「,」で区切って複数OK）</em></span>
+            <input type="text" id="q-joinwords" maxlength="200" placeholder="参加希望">
+          </label>
+          <label class="field">
+            <span>辞退の言葉<em>（この言葉を含むコメントでリストから外れます）</em></span>
+            <input type="text" id="q-cancelwords" maxlength="200" placeholder="辞退">
+          </label>
+          <label class="check"><input type="checkbox" id="q-onlyopen"> 「次の対戦者募集中」のときだけ受け付ける</label>
+          <div class="two">
+            <label class="field">
+              <span>シャッフルで選ぶ人数</span>
+              <select id="q-pickcount">
+                <option value="1">1人</option><option value="2">2人</option><option value="3">3人</option>
+                <option value="4">4人</option><option value="5">5人</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-primary btn-sm q-save" id="q-save">保存</button>
+          </div>
+          <p class="hint">OBSに出すとき：ブラウザソースのURLを <code>http://localhost:3000/queue</code> にしてください。</p>
+        </div>
+      </div>
+
+      <div class="q-actions">
+        <button type="button" class="btn btn-primary" id="q-shuffle">🎲 3人を選ぶ</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="q-reshuffle">選び直す</button>
+      </div>
+
+      <div id="q-list"></div>
+
+      <form class="q-add" id="q-add" autocomplete="off">
+        <input type="text" id="q-add-name" maxlength="40" placeholder="名前を入れて手で追加">
+        <button type="submit" class="btn btn-ghost btn-sm">追加</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="q-clear">リストを空にする</button>
+      </form>
+      <p class="hint" id="q-hint"></p>
     </section>
 
     <section class="card">

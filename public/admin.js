@@ -36,6 +36,9 @@ var ui = {
   editStamps: null, // 履歴編集中のスタンプ
   picked: null,     // わんコメから選んだリスナー { name, icon, listenerId }
   ocOpen: false,    // わんコメの設定欄を開いているか
+  qOpen: false,     // 参加受付の設定欄を開いているか
+  qDirty: false,    // 参加受付の設定を書きかけ中か
+  qShuffleId: null, // 最後に見たシャッフルの番号（選ばれた人を光らせるため）
   ocDirty: false,   // わんコメの設定を入力中か
   roomDirty: false  // ルームIDを入力中か
 };
@@ -367,6 +370,7 @@ function applyState(next) {
 function render() {
   renderVersion();
   renderOverlayDesign();
+  renderQueue();
   mountStampPicker($('q-stamps'), ui.quickStamps);
   renderRecruit();
   renderRoom();
@@ -383,6 +387,112 @@ function render() {
 function renderVersion() {
   var el = $('app-ver');
   if (el) el.textContent = state.appVersion ? 'v' + state.appVersion : '';
+}
+
+// --- 参加待ちリスト ---
+function hhmmOf(iso) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+}
+
+function renderQueue() {
+  var queue = state.queue || [];
+  var config = (state.settings && state.settings.queue) || {};
+  var oc = state.onecomme || {};
+  var meta = state.queueMeta || {};
+
+  $('q-count').textContent = queue.length + '人';
+
+  // 自動受付の状態
+  var badge = $('q-auto');
+  if (!config.autoJoin) { badge.textContent = '自動受付 オフ'; badge.className = 'oc-state'; }
+  else if (!oc.enabled || !oc.connected) { badge.textContent = '自動受付（わんコメ未接続）'; badge.className = 'oc-state err'; }
+  else if (config.onlyWhenOpen && state.settings.recruit !== 'open') { badge.textContent = '自動受付 お休み中'; badge.className = 'oc-state wait'; }
+  else { badge.textContent = '● 自動受付中'; badge.className = 'oc-state on'; }
+
+  // 設定欄
+  $('q-settings').hidden = !ui.qOpen;
+  if (!ui.qDirty) {
+    $('q-autojoin').checked = config.autoJoin !== false;
+    $('q-joinwords').value = (config.joinWords || []).join(', ');
+    $('q-cancelwords').value = (config.cancelWords || []).join(', ');
+    $('q-onlyopen').checked = config.onlyWhenOpen !== false;
+    $('q-pickcount').value = String(config.pickCount || 3);
+  }
+  var count = config.pickCount || 3;
+  var pickedCount = queue.filter(function (e) { return e.pick > 0; }).length;
+  var full = queue.length > 0 && pickedCount >= Math.min(count, queue.length);
+  // 選び終わっているときは押せないことが分かるようにする
+  $('q-shuffle').textContent = full ? '✓ ' + pickedCount + '人 選ばれています'
+    : (pickedCount ? '🎲 あと' + (count - pickedCount) + '人を選ぶ' : '🎲 ' + count + '人を選ぶ');
+  $('q-shuffle').disabled = !queue.length || full;
+  $('q-reshuffle').disabled = !queue.length;
+
+  var joinWord = (config.joinWords || ['参加希望'])[0] || '参加希望';
+  var cancelWord = (config.cancelWords || ['辞退'])[0] || '辞退';
+  $('q-hint').textContent = config.autoJoin
+    ? '「' + joinWord + '」とコメントした人が自動で入り、「' + cancelWord + '」で外れます。対戦を始めた人はリストから消えます。'
+    : '自動受付はオフです。名前を入れて手で追加できます。';
+
+  // 一覧
+  var box = $('q-list');
+  if (!queue.length) {
+    var empty = '<div class="empty">まだ参加希望の人はいません。' +
+      (config.autoJoin ? '<br>「' + esc(joinWord) + '」とコメントすると、ここに並びます。' : '') + '</div>';
+    if (box.__html !== empty) { box.__html = empty; box.innerHTML = empty; }
+    return;
+  }
+
+  var fresh = {};
+  // 新しくシャッフルされたら、選ばれた人を光らせる
+  if (ui.qShuffleId != null && meta.shuffleId !== ui.qShuffleId) {
+    (meta.lastPicked || []).forEach(function (id) { fresh[id] = true; });
+  }
+  ui.qShuffleId = meta.shuffleId;
+
+  var picked = queue.filter(function (e) { return e.pick > 0; });
+  var waiting = queue.filter(function (e) { return !e.pick; });
+  var busy = !!state.current;
+
+  function row(e, i) {
+    var lead = e.pick
+      ? '<span class="q-pick">' + e.pick + '</span>'
+      : '<span class="q-no">' + (i + 1) + '</span>';
+    var sub = hhmmOf(e.joinedAt) + (e.source === 'onecomme' ? '　わんコメ' : '　手で追加') +
+      (e.comment ? '　「' + e.comment + '」' : '');
+    return '<div class="q-row' + (e.pick ? ' picked' : '') + (fresh[e.id] ? ' flash' : '') + '" data-qid="' + esc(e.id) + '">' +
+      lead + avatar(e.icon, e.name) +
+      '<div class="q-main" data-qtake title="クリックで名前を入力欄に入れる">' +
+        '<div class="q-name">' + esc(e.name) + '</div>' +
+        '<div class="q-sub">' + esc(sub) + '</div>' +
+      '</div>' +
+      '<div class="q-btns">' +
+        '<button type="button" class="btn btn-primary btn-sm" data-qstart' + (busy ? ' disabled title="対戦中です"' : '') + '>対戦開始</button>' +
+        (e.pick ? '<button type="button" class="btn btn-ghost btn-sm" data-qunpick>戻す</button>' : '') +
+        '<button type="button" class="btn btn-ghost btn-sm" data-qremove title="リストから外す">×</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var html = '';
+  if (picked.length) html += '<div class="q-group">選ばれた人</div>' + picked.map(row).join('');
+  if (waiting.length) html += '<div class="q-group">参加待ち（来た順）</div>' + waiting.map(row).join('');
+  html = '<div class="q-list">' + html + '</div>';
+
+  if (box.__html === html) return;
+  var scroller = box.querySelector('.q-list');
+  var keep = scroller ? scroller.scrollTop : 0;
+  box.__html = html;
+  box.innerHTML = html;
+  var next = box.querySelector('.q-list');
+  if (next && keep) next.scrollTop = keep;
+}
+
+function queueEntry(id) {
+  var list = state.queue || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  return null;
 }
 
 // --- OBS表示のデザイン ---
@@ -869,6 +979,86 @@ $('f-result').addEventListener('change', function (e) { ui.filterResult = e.targ
 $('clear-today').addEventListener('click', function () {
   if (!window.confirm('本日の対戦履歴をすべて削除します。よろしいですか？（元に戻せません）')) return;
   api('POST', '/api/history/clear-today');
+});
+
+// 参加待ちリスト
+$('q-list').addEventListener('click', function (e) {
+  var row = e.target.closest('[data-qid]');
+  if (!row) return;
+  var entry = queueEntry(row.dataset.qid);
+  if (!entry) return;
+
+  if (e.target.closest('[data-qstart]')) {
+    api('POST', '/api/queue/' + encodeURIComponent(entry.id) + '/start').then(function () {
+      // 対戦中の記録ができるよう「対戦中に記録」のタブを開く
+      var liveTab = document.querySelector('.tab[data-tab="live"]');
+      if (liveTab) liveTab.click();
+    });
+  } else if (e.target.closest('[data-qunpick]')) {
+    api('POST', '/api/queue/' + encodeURIComponent(entry.id) + '/unpick');
+  } else if (e.target.closest('[data-qremove]')) {
+    if (!window.confirm(entry.name + ' さんをリストから外しますか？')) return;
+    api('DELETE', '/api/queue/' + encodeURIComponent(entry.id));
+  } else if (e.target.closest('[data-qtake]')) {
+    // わんコメの「取り込む」と同じく、名前とアイコンを入力欄に入れる
+    ui.picked = { name: entry.name, icon: entry.icon, listenerId: entry.listenerId };
+    if ($('st-name')) $('st-name').value = entry.name;
+    if ($('q-name')) $('q-name').value = entry.name;
+    renderOneComme();
+  }
+});
+
+$('q-shuffle').addEventListener('click', function () {
+  api('POST', '/api/queue/shuffle', { mode: 'fill' });
+});
+
+$('q-reshuffle').addEventListener('click', function () {
+  var picked = (state.queue || []).filter(function (e) { return e.pick > 0; }).length;
+  if (picked && !window.confirm('選ばれている人も含めて、全員の中から選び直しますか？')) return;
+  api('POST', '/api/queue/shuffle', { mode: 'all' });
+});
+
+$('q-add').addEventListener('submit', function (e) {
+  e.preventDefault();
+  var name = $('q-add-name').value.trim();
+  if (!name) return;
+  api('POST', '/api/queue', { name: name }).then(function () { $('q-add-name').value = ''; });
+});
+
+$('q-clear').addEventListener('click', function () {
+  if (!(state.queue || []).length) return;
+  if (!window.confirm('参加待ちリストを空にします。よろしいですか？')) return;
+  api('POST', '/api/queue/clear');
+});
+
+$('q-toggle').addEventListener('click', function () {
+  ui.qOpen = !ui.qOpen;
+  ui.qDirty = false;
+  renderQueue();
+});
+
+['q-autojoin', 'q-joinwords', 'q-cancelwords', 'q-onlyopen', 'q-pickcount'].forEach(function (id) {
+  $(id).addEventListener('input', function () { ui.qDirty = true; });
+  $(id).addEventListener('change', function () { ui.qDirty = true; });
+});
+
+$('q-save').addEventListener('click', function () {
+  var split = function (text) {
+    return text.split(/[,、，]/).map(function (w) { return w.trim(); }).filter(Boolean);
+  };
+  var joinWords = split($('q-joinwords').value);
+  var cancelWords = split($('q-cancelwords').value);
+  if (!joinWords.length) { window.alert('参加の言葉を1つ以上入れてください。'); return; }
+  if (!cancelWords.length) { window.alert('辞退の言葉を1つ以上入れてください。'); return; }
+  api('PUT', '/api/settings', {
+    queue: {
+      autoJoin: $('q-autojoin').checked,
+      joinWords: joinWords,
+      cancelWords: cancelWords,
+      onlyWhenOpen: $('q-onlyopen').checked,
+      pickCount: Number($('q-pickcount').value)
+    }
+  }).then(function () { ui.qDirty = false; renderQueue(); });
 });
 
 // OBS表示のデザイン
