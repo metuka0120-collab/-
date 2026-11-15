@@ -53,7 +53,7 @@ var THEMES = {
 
 var opts = {
   day: 'today', theme: 'dark', cols: 'auto',
-  comment: true, myName: false, myDeck: false, h2h: false, stamps: true, icons: true,
+  deck: true, comment: true, myName: false, myDeck: false, h2h: false, stamps: true, icons: true,
   title: '', note: null
 };
 
@@ -396,13 +396,22 @@ function draw() {
       if (rec.total > 1) h2hText = '通算 ' + rec.total + '戦 ' + rec.wins + 'WIN ' + rec.losses + 'LOSE';
     }
 
-    var lines = 2 + commentLines.length + (h2hText ? 1 : 0); // 1行目：名前 / 2行目：デッキ
+    /*
+      2行目のデッキ。デッキを入れていないリスナーのときに
+      「デッキ未入力」とは出さず、書くことが無ければ行ごと詰める。
+    */
+    var deckText = opts.deck ? (r.deck || '') : '';
+    var showMyDeck = !!(perRowMyDeck && r.myDeck);
+    var deckLine = !!(deckText || showMyDeck);
+
+    var lines = 1 + (deckLine ? 1 : 0) + commentLines.length + (h2hText ? 1 : 0);
     var height = sz.rowPad * 2 + lines * sz.lineGap;
     // スタンプが行からはみ出さないだけの高さは確保する
     if (stampIds.length) height = Math.max(height, sz.stamp + 22);
 
     return {
       r: r, commentLines: commentLines, h2hText: h2hText,
+      deckText: deckText, showMyDeck: showMyDeck, deckLine: deckLine,
       stampIds: stampIds, stampBlock: stampBlock, textW: textW, h: height
     };
   });
@@ -581,25 +590,29 @@ function draw() {
       ctx.fillStyle = t.text;
       ctx.fillText(fit(ctx, r.name, innerX + textW - nameX), nameX, lineY + 2);
 
-      // 2行目：デッキ
-      lineY += sz.lineGap;
-      var deckX = innerX;
-      setFont(ctx, sz.deck, 'bold');
-      ctx.fillStyle = t.accent;
-      var deckText = r.deck || 'デッキ未入力';
-      var maxDeckW = textW * (perRowMyDeck && r.myDeck ? 0.5 : 1) - 10;
-      var shown = fit(ctx, deckText, maxDeckW);
-      ctx.fillText(shown, deckX, lineY);
+      // 2行目：デッキ（書くことが無ければこの行ごと出さない）
+      if (row.deckLine) {
+        lineY += sz.lineGap;
+        var deckX = innerX;
+        setFont(ctx, sz.deck, 'bold');
+        ctx.fillStyle = t.accent;
+        var maxDeckW = textW * (row.showMyDeck ? 0.5 : 1) - 10;
+        var shown = row.deckText ? fit(ctx, row.deckText, maxDeckW) : '';
+        var usedW = 0;
+        if (shown) {
+          ctx.fillText(shown, deckX, lineY);
+          usedW = ctx.measureText(shown).width;
+        }
 
-      if (perRowMyDeck && r.myDeck) {
-        var usedW = ctx.measureText(shown).width;
-        setFont(ctx, sz.deck - 2, '');
-        ctx.fillStyle = t.dim;
-        var vs = '  vs  自分：';
-        ctx.fillText(vs, deckX + usedW, lineY);
-        var vsW = ctx.measureText(vs).width;
-        ctx.fillStyle = t.muted;
-        ctx.fillText(fit(ctx, r.myDeck, textW - usedW - vsW), deckX + usedW + vsW, lineY);
+        if (row.showMyDeck) {
+          setFont(ctx, sz.deck - 2, '');
+          ctx.fillStyle = t.dim;
+          var vs = shown ? '  vs  自分：' : '自分：';
+          ctx.fillText(vs, deckX + usedW, lineY);
+          var vsW = ctx.measureText(vs).width;
+          ctx.fillStyle = t.muted;
+          ctx.fillText(fit(ctx, r.myDeck, textW - usedW - vsW), deckX + usedW + vsW, lineY);
+        }
       }
 
       // 3行目以降：感想（長ければ折り返す）
@@ -728,6 +741,7 @@ function say(text) { $('msg').textContent = text; }
 $('o-day').addEventListener('change', function (e) { opts.day = e.target.value; draw(); });
 $('o-theme').addEventListener('change', function (e) { opts.theme = e.target.value; draw(); });
 $('o-cols').addEventListener('change', function (e) { opts.cols = e.target.value; draw(); });
+$('o-deck').addEventListener('change', function (e) { opts.deck = e.target.checked; draw(); });
 $('o-comment').addEventListener('change', function (e) { opts.comment = e.target.checked; draw(); });
 $('o-mydeck').addEventListener('change', function (e) { opts.myDeck = e.target.checked; draw(); });
 $('o-myname').addEventListener('change', function (e) { opts.myName = e.target.checked; draw(); });

@@ -151,7 +151,7 @@ function renderOneComme() {
   $('oc-hint').textContent = !oc.enabled
     ? 'わんコメを起動した状態で「わんコメと連携する」をONにしてください。'
     : (oc.connected
-        ? 'つながっています。わんコメにコメントが来ると、下に出ます。'
+        ? 'つながっています。コメントした順に下へ足していきます。一度出た人の場所は動きません。'
         : 'つながりません。わんコメが起動しているか、接続先が合っているか確認してください。'
           + (oc.lastError ? '（' + oc.lastError + '）' : ''));
 
@@ -179,16 +179,16 @@ function renderOneComme() {
   var box = $('oc-list');
 
   if (!oc.enabled) {
-    box.innerHTML = '<div class="empty">連携をONにすると、コメントした人がここに出ます。<br>名前とアイコンをそのまま取り込めます。</div>';
+    setOcList(box, '<div class="empty">連携をONにすると、コメントした人がここに出ます。<br>名前とアイコンをそのまま取り込めます。</div>');
     return;
   }
   if (!list.length) {
-    box.innerHTML = '<div class="empty">' +
-      (oc.connected ? 'コメントを待っています…' : 'わんコメに接続できていません。') + '</div>';
+    setOcList(box, '<div class="empty">' +
+      (oc.connected ? 'コメントを待っています…' : 'わんコメに接続できていません。') + '</div>');
     return;
   }
 
-  box.innerHTML = '<div class="oc-list">' + list.map(function (person, i) {
+  var html = '<div class="oc-list">' + list.map(function (person, i) {
     return '<button type="button" class="oc-row" data-i="' + i + '">' +
       avatar(person.profileImage, person.name) +
       '<span class="oc-name">' + esc(person.name) +
@@ -197,6 +197,9 @@ function renderOneComme() {
       '<span class="oc-take">取り込む</span>' +
     '</button>';
   }).join('') + '</div>';
+
+  // 中身が同じなら作り直さない（押そうとしたボタンが消えないように）
+  if (!setOcList(box, html)) return;
 
   Array.prototype.forEach.call(box.querySelectorAll('.oc-row'), function (row) {
     row.addEventListener('click', function () {
@@ -209,6 +212,24 @@ function renderOneComme() {
       renderOneComme();
     });
   });
+}
+
+/*
+  コメント一覧を書き換える。
+  中身が同じときは何もしない。書き換えるときもスクロール位置を保つので、
+  下の方の人を取り込もうとしている最中に新しいコメントが来ても、見ている場所は動かない。
+  書き換えたときだけ true を返す（ボタンの処理を付け直す必要があるため）。
+*/
+var lastOcHtml = null;
+function setOcList(box, html) {
+  if (lastOcHtml === html) return false;
+  var scroller = box.querySelector('.oc-list');
+  var keep = scroller ? scroller.scrollTop : 0;
+  box.innerHTML = html;
+  lastOcHtml = html;
+  var next = box.querySelector('.oc-list');
+  if (next && keep) next.scrollTop = keep;
+  return true;
 }
 
 /** 記録するときに、取り込んだアイコンを一緒に送る */
