@@ -3,14 +3,16 @@
 /* =========================================================
    実況テロップ（配信画面の下のラインに流す）
 
-   本日の対戦を、右から左へ順番に流し続ける。
-   管理画面で対戦を記録すると、リロードなしでその場に加わる。
+   本日の対戦と参加待ちの人を、右から左へ順番に流し続ける。
+   管理画面で対戦を記録したり、参加希望が来たりすると、リロードなしでその場に加わる。
 
    URLパラメータ
      ?speed=70      流れる速さ（1秒あたりのピクセル数・既定70）
      ?bg=none       帯の下地を消して完全に透明にする
      ?head=0        左の「本日 5WIN 3LOSE」を消す
      ?only=comment  感想を書いた対戦だけ流す
+     ?only=queue    参加待ちだけ流す（対戦結果は流さない）
+     ?queue=0       参加待ちを流さない（?queue=1 なら記録画面の設定にかかわらず流す）
      ?scale=1.2     文字とアイコンの大きさ（既定1）
    ========================================================= */
 
@@ -18,6 +20,11 @@ var params = new URLSearchParams(location.search);
 var SPEED = Math.min(400, Math.max(10, Number(params.get('speed')) || 70));
 var SHOW_HEAD = params.get('head') !== '0';
 var ONLY_COMMENT = params.get('only') === 'comment';
+var ONLY_QUEUE = params.get('only') === 'queue';
+var URL_QUEUE = params.get('queue');   // '0' / '1' / null（記録画面の設定に従う）
+
+// 参加待ちを、対戦結果いくつごとに挟むか（結果が多くても、参加待ちが何度も見えるように）
+var QUEUE_EVERY = 4;
 var SCALE = Math.min(3, Math.max(0.5, Number(params.get('scale')) || 1));
 var NO_BG = params.get('bg') === 'none';
 
@@ -57,6 +64,7 @@ function findStamp(id) {
 
 /** 流す対象（本日ぶん・古い順） */
 function targets() {
+  if (ONLY_QUEUE) return [];
   var key = todayKey();
   var rows = key ? (state.history || []).filter(function (h) { return h.date === key; }) : [];
   if (ONLY_COMMENT) rows = rows.filter(function (h) { return h.comment; });
@@ -86,6 +94,63 @@ function itemHtml(h) {
   '<span class="sep"></span>';
 }
 
+/** 参加待ちを流すかどうか */
+function queueOn() {
+  if (ONLY_QUEUE) return true;
+  if (URL_QUEUE === '0') return false;
+  if (URL_QUEUE === '1') return true;
+  var config = (state.settings && state.settings.queue) || {};
+  return config.ticker !== false;
+}
+
+/** 参加待ちの1かたまり（選ばれた人 → 来た順） */
+function queueHtml() {
+  if (!queueOn()) return '';
+  var queue = state.queue || [];
+  var settings = state.settings || {};
+  var config = settings.queue || {};
+  var recruit = settings.recruit || 'open';
+
+  if (!queue.length) {
+    // 誰もいないときは、参加のしかたを流す
+    var joinWord = (config.joinWords || [])[0] || '参加希望';
+    if (recruit === 'open') {
+      return '<div class="item q-item"><span class="q-badge open">参加受付中</span>' +
+        '<span class="q-call">「' + esc(joinWord) + '」とコメントで参加できます！</span></div><span class="sep"></span>';
+    }
+    return '';
+  }
+
+  var picked = queue.filter(function (e) { return e.pick > 0; });
+  var waiting = queue.filter(function (e) { return !e.pick; });
+  var html = '<div class="item q-item">' +
+    '<span class="q-badge ' + esc(recruit) + '">参加待ち <b>' + queue.length + '</b>人</span>';
+  if (picked.length) {
+    html += '<span class="q-label">次の対戦者</span>' + picked.map(function (e) {
+      return '<span class="q-person"><span class="q-pick">' + e.pick + '</span><span class="name">' + esc(e.name) + '</span></span>';
+    }).join('');
+  }
+  if (waiting.length) {
+    html += (picked.length ? '<span class="q-label">参加待ち</span>' : '') + waiting.map(function (e, i) {
+      return '<span class="q-person"><span class="q-ord">' + (i + 1) + '</span><span class="q-name">' + esc(e.name) + '</span></span>';
+    }).join('');
+  }
+  return html + '</div><span class="sep"></span>';
+}
+
+/** 流す並び（参加待ち → 対戦結果4件 → 参加待ち → …） */
+function cycleHtml(rows) {
+  var q = queueHtml();
+  if (ONLY_QUEUE) return q;
+  if (!rows.length) return q;
+  var html = '';
+  rows.forEach(function (h, i) {
+    if (q && i % QUEUE_EVERY === 0) html += q;
+    html += itemHtml(h);
+  });
+  return html;
+}
+
 /**
  * 流す中身を組み立てる。
  * 途切れずにループさせるため、画面幅を超えるまで同じ並びを繰り返し入れる。
@@ -97,7 +162,8 @@ function build() {
   elHWin.textContent = (state.stats && state.stats.wins) || 0;
   elHLose.textContent = (state.stats && state.stats.losses) || 0;
 
-  if (!rows.length) {
+  var one = cycleHtml(rows);
+  if (!one) {
     bar.classList.add('is-empty');
     track.innerHTML = '';
     setWidth = 0;
@@ -105,7 +171,6 @@ function build() {
   }
   bar.classList.remove('is-empty');
 
-  var one = rows.map(itemHtml).join('');
   track.innerHTML = one;
   setWidth = track.scrollWidth;
 
@@ -155,7 +220,7 @@ function refresh() {
   var rows = targets();
   var key = rows.map(function (h) {
     return [h.id, h.result, h.name, h.deck, h.comment, h.icon, (h.stamps || []).join('/')].join('|');
-  }).join('#') + '@' + win.clientWidth;
+  }).join('#') + '@' + win.clientWidth + '@' + queueHtml();
 
   if (key === lastKey) {
     elHWin.textContent = (state.stats && state.stats.wins) || 0;

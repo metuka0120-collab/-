@@ -420,6 +420,9 @@ function renderQueue() {
     $('q-onlyopen').checked = config.onlyWhenOpen !== false;
     $('q-pickcount').value = String(config.pickCount || 3);
   }
+  // 実況テロップにも流すか（すぐ反映するので、書きかけ中かどうかに関係なく合わせる）
+  $('q-ticker').checked = config.ticker !== false;
+
   // 流れる速さ（動かしている最中は上書きしない）
   var speed = Number(config.speed) || 100;
   if (document.activeElement !== $('q-speed')) {
@@ -1053,6 +1056,11 @@ $('q-toggle').addEventListener('click', function () {
 ['q-autojoin', 'q-joinwords', 'q-cancelwords', 'q-onlyopen', 'q-pickcount'].forEach(function (id) {
   $(id).addEventListener('input', function () { ui.qDirty = true; });
   $(id).addEventListener('change', function () { ui.qDirty = true; });
+});
+
+// 実況テロップにも流すかどうかは「保存」を待たずにすぐ反映する
+$('q-ticker').addEventListener('change', function (e) {
+  api('PUT', '/api/settings', { queue: { ticker: e.target.checked } });
 });
 
 // 流れる速さは「保存」を待たずにすぐ反映する

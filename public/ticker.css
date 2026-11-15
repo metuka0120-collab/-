@@ -176,6 +176,57 @@ body {
   display: block;
 }
 
+/* ---------- 参加待ち ---------- */
+.q-item { gap: calc(12px * var(--scale)); }
+.q-badge {
+  font-size: calc(14px * var(--scale));
+  font-weight: 700;
+  padding: calc(3px * var(--scale)) calc(12px * var(--scale));
+  border-radius: 999px;
+  flex: none;
+  letter-spacing: .04em;
+}
+.q-badge b { font-size: calc(18px * var(--scale)); margin: 0 2px; }
+/* 募集状況の色は、OBS表示と同じ（緑＝募集中・黄＝ストップ中・赤＝募集終了） */
+.q-badge.open   { background: linear-gradient(90deg, #4fe39b, #21a86a); color: #04261a; }
+.q-badge.paused { background: linear-gradient(90deg, #ffc861, #e08c14); color: #2e1c00; }
+.q-badge.closed { background: linear-gradient(90deg, #ff5a67, #cf1526); color: #fff4f5; }
+.q-label {
+  font-size: calc(13px * var(--scale));
+  font-weight: 700;
+  color: #c4cee6;
+  flex: none;
+}
+.q-person { display: inline-flex; align-items: center; gap: calc(6px * var(--scale)); flex: none; }
+.q-pick {
+  width: calc(24px * var(--scale));
+  height: calc(24px * var(--scale));
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  font-size: calc(14px * var(--scale));
+  font-weight: 800;
+  background: #ffc43d;
+  color: #2a1d00;
+}
+.q-ord {
+  font-size: calc(13px * var(--scale));
+  font-weight: 700;
+  color: #9aa6c4;
+  font-variant-numeric: tabular-nums;
+}
+.q-name {
+  font-size: calc(19px * var(--scale));
+  font-weight: 700;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, .65);
+}
+.q-call {
+  font-size: calc(19px * var(--scale));
+  font-weight: 700;
+  text-shadow: 0 2px 5px rgba(0, 0, 0, .65);
+  flex: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .track { animation: none !important; }
 }
