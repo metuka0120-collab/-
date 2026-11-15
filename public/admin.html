@@ -146,6 +146,43 @@
       </form>
     </section>
 
+    <section class="card" id="ovd-card">
+      <h2>OBS表示のデザイン<span class="count">OBS表示</span></h2>
+      <div class="ovd-themes" id="ovd-themes"></div>
+
+      <div class="ovd-preview">
+        <iframe id="ovd-frame" src="/overlay" title="OBS表示の見本" tabindex="-1"></iframe>
+      </div>
+      <p class="hint">選ぶとすぐOBSにも反映されます。OBS側の設定を変える必要はありません。</p>
+
+      <div class="ovd-fonts">
+        <label class="field">
+          <span>名前のフォント</span>
+          <select id="ovd-font-name"></select>
+        </label>
+        <label class="field">
+          <span>名前の大きさ <b id="ovd-size-name-label">100</b> %</span>
+          <input type="range" id="ovd-size-name" min="60" max="180" step="5" value="100">
+        </label>
+        <label class="field">
+          <span>ラベル・数字のフォント</span>
+          <select id="ovd-font-label"></select>
+        </label>
+        <label class="field">
+          <span>ラベル・数字の大きさ <b id="ovd-size-label-label">100</b> %</span>
+          <input type="range" id="ovd-size-label" min="60" max="160" step="5" value="100">
+        </label>
+        <label class="field">
+          <span>PCに入っているフォントを使う<em>（名前の欄に入ります）</em></span>
+          <div class="ovd-custom">
+            <input type="text" id="ovd-custom" maxlength="40" placeholder="例）HGP創英角ﾎﾟｯﾌﾟ体">
+            <button type="button" class="btn btn-ghost btn-sm" id="ovd-custom-use">使う</button>
+          </div>
+        </label>
+      </div>
+      <p class="hint">大きくしたときは、OBSのブラウザソースの幅と高さも広げてください。</p>
+    </section>
+
   </div>
 
   <!-- 右：ワンコメ取り込み + 履歴 -->
@@ -220,6 +257,7 @@
 <datalist id="deck-list"></datalist>
 <datalist id="mydeck-list"></datalist>
 
+<script src="/font-list.js"></script>
 <script src="/admin.js"></script>
 </body>
 </html>

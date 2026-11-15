@@ -527,3 +527,35 @@ select { cursor: pointer; }
 }
 .card-room .room-form { margin-top: 0; padding-top: 0; border-top: 0; }
 .card-room .room-row input { font-size: 18px; padding: 11px; }
+
+/* ---------- OBS表示のデザイン ---------- */
+.ovd-themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.ovd-theme {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 7px 7px 8px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px;
+  color: var(--text); font-size: 12px; font-weight: 700; text-align: left; cursor: pointer;
+}
+.ovd-theme:hover { border-color: var(--accent); }
+.ovd-theme.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.ovd-sw { display: flex; height: 16px; border-radius: 5px; overflow: hidden; }
+.ovd-sw i { flex: 1; }
+
+.ovd-preview {
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  overflow: hidden;
+  background: repeating-linear-gradient(45deg, #2b4250 0 12px, #33505f 12px 24px);
+  height: 160px;
+}
+/* 500×180 の見本を、カードの幅に合わせて縮めて見せる */
+.ovd-preview iframe {
+  width: 500px; height: 190px; border: 0;
+  transform: scale(.72); transform-origin: 0 0;
+  pointer-events: none;
+  background: transparent;
+}
+.ovd-fonts { display: grid; gap: 8px; margin-top: 10px; }
+.ovd-custom { display: flex; gap: 6px; }
+.ovd-custom input { flex: 1; min-width: 0; }

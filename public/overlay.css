@@ -12,7 +12,7 @@ html, body {
 }
 
 body {
-  font-family: "Yu Gothic UI", "Meiryo", "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-label, "Yu Gothic UI", "Meiryo", "Segoe UI", system-ui, sans-serif);
   color: #fff;
   -webkit-font-smoothing: antialiased;
 }
@@ -87,7 +87,7 @@ body {
 }
 
 .tag {
-  font-size: 10px;
+  font-size: calc(10px * var(--ls, 1));
   font-weight: 700;
   letter-spacing: .12em;
   padding: 1px 7px;
@@ -98,7 +98,7 @@ body {
 }
 
 .match-no {
-  font-size: 11px;
+  font-size: calc(11px * var(--ls, 1));
   font-weight: 700;
   color: #b9c6e6;
   letter-spacing: .04em;
@@ -107,7 +107,8 @@ body {
 
 /* ---------- リスナー名 / デッキ名 ---------- */
 .name {
-  font-size: 22px;
+  font-family: var(--font-name, inherit);
+  font-size: calc(22px * var(--ns, 1));
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: .01em;
@@ -121,7 +122,7 @@ body {
 .match-no[hidden] { display: none; }
 
 .deck {
-  font-size: 13px;
+  font-size: calc(13px * var(--ls, 1));
   font-weight: 600;
   color: #8fd7ff;
   line-height: 1.4;
@@ -140,7 +141,7 @@ body {
 */
 .tag-recruit {
   flex: none;
-  font-size: 24px;
+  font-size: calc(24px * var(--ls, 1));
   font-weight: 700;
   letter-spacing: .04em;
   line-height: 1.1;
@@ -155,7 +156,7 @@ body {
   待機中の「募集中」は下の大きな文字と重なるため、小さいままにしておく。
 */
 .overlay:not(.is-idle) .tag {
-  font-size: 24px;
+  font-size: calc(24px * var(--ls, 1));
   letter-spacing: .04em;
   line-height: 1.1;
   padding: 4px 13px;
@@ -179,7 +180,7 @@ body {
 .room[hidden] { display: none; }
 
 .room-tag {
-  font-size: 9px;
+  font-size: calc(9px * var(--ls, 1));
   font-weight: 700;
   letter-spacing: .14em;
   padding: 1px 6px;
@@ -190,7 +191,7 @@ body {
 }
 
 .room-id {
-  font-size: 20px;
+  font-size: calc(20px * var(--ls, 1));
   font-weight: 700;
   letter-spacing: .1em;
   color: #ffd873;
@@ -211,12 +212,12 @@ body {
   margin-top: 6px;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, .13);
-  font-size: 11px;
+  font-size: calc(11px * var(--ls, 1));
   color: #c6cfe4;
   white-space: nowrap;
 }
 
-.record b { font-size: 14px; font-weight: 700; }
+.record b { font-size: calc(14px * var(--ls, 1)); font-weight: 700; }
 .rec-win b  { color: #4fe39b; }
 .rec-lose b { color: #ff7b86; }
 .rec-rate b { color: #7dc4ff; }
@@ -244,3 +245,265 @@ body {
 
 /* 成績を隠す（?stats=0） */
 .overlay.no-record .record { display: none; }
+
+/* =========================================================
+   デザイン（テーマ）
+   記録画面の「OBS表示のデザイン」で選ぶ。body に th-○○ が付く。
+   募集状況の色の意味（緑＝募集中・黄＝ストップ中・赤＝募集終了）は
+   どのテーマでも変えない。
+   ========================================================= */
+
+/* 共通：クラシック以外は左の線を使わない */
+body:not(.th-classic) .accent { display: none; }
+body:not(.th-classic) .name { text-shadow: none; }
+body:not(.th-classic) .room-id { text-shadow: none; }
+
+/* ---------- ポップ：水玉とステッカー ---------- */
+body.th-pop .overlay {
+  background:
+    radial-gradient(circle, rgba(255, 196, 120, .45) 2.2px, transparent 2.6px) 0 0 / 18px 18px,
+    #FFF7E8;
+  border: 3px solid #2B2340;
+  border-radius: 18px;
+  box-shadow: 4px 5px 0 #2B2340;
+  color: #2B2340;
+  margin: 2px 0 0 3px;
+}
+body.th-pop .body { padding: 8px 18px 9px 15px; }
+body.th-pop .tag {
+  background: #FFE27A;
+  color: #2B2340;
+  border: 2.5px solid #2B2340;
+  border-radius: 999px;
+  box-shadow: 2px 3px 0 #2B2340;
+  letter-spacing: .04em;
+}
+body.th-pop .overlay:not(.is-idle) .tag { transform: rotate(-3deg); border-radius: 999px; }
+body.th-pop .overlay .tag.tag-recruit { border: 2.5px solid #2B2340; border-radius: 999px; box-shadow: 2px 3px 0 #2B2340; transform: rotate(2deg); }
+body.th-pop .overlay .tag.tag-recruit.rc-open   { background: #8BE8BC; color: #2B2340; }
+body.th-pop .overlay .tag.tag-recruit.rc-paused { background: #FFD36E; color: #2B2340; }
+body.th-pop .overlay .tag.tag-recruit.rc-closed { background: #FF5C70; color: #FFFFFF; }
+body.th-pop .overlay.is-open .tag   { background: #8BE8BC; color: #2B2340; }
+body.th-pop .overlay.is-paused .tag { background: #FFD36E; color: #2B2340; }
+body.th-pop .overlay.is-closed .tag { background: #FF5C70; color: #FFFFFF; }
+body.th-pop .name,
+body.th-pop .overlay.is-idle .name,
+body.th-pop .overlay.is-closed .name { color: #2B2340; }
+body.th-pop .deck,
+body.th-pop .overlay.is-open .deck,
+body.th-pop .overlay.is-paused .deck,
+body.th-pop .overlay.is-closed .deck { color: #7A5CFA; }
+body.th-pop .room,
+body.th-pop .record { border-top: 2px dashed rgba(43, 35, 64, .45); }
+body.th-pop .room-tag,
+body.th-pop .overlay.is-open .room-tag { background: #2B2340; color: #FFE27A; border-radius: 999px; }
+body.th-pop .room-id { color: #7A5CFA; }
+body.th-pop .record { color: #6E6587; }
+body.th-pop .rec-win b  { color: #159A62; }
+body.th-pop .rec-lose b { color: #E0416A; }
+body.th-pop .rec-rate b { color: #7A5CFA; }
+body.th-pop .ov-icon { box-shadow: 0 0 0 2.5px #2B2340; margin-left: 14px; }
+
+/* ---------- ゆめかわ：パステルとキラキラ ---------- */
+body.th-yume .overlay {
+  background: linear-gradient(135deg, #F3E3FF 0%, #FFE3F1 55%, #DDF6F3 100%);
+  border: 2px solid rgba(255, 255, 255, .95);
+  border-radius: 24px;
+  box-shadow: 0 6px 22px rgba(196, 140, 255, .55);
+  color: #6A4A8C;
+}
+body.th-yume .overlay::after {
+  content: "✦";
+  position: absolute;
+  right: 12px;
+  top: 6px;
+  font-size: 18px;
+  color: #FFFFFF;
+  text-shadow: 0 0 8px rgba(255, 180, 230, .9);
+}
+body.th-yume .overlay::before {
+  content: "✧";
+  position: absolute;
+  right: 30px;
+  bottom: 8px;
+  font-size: 13px;
+  color: #FFB3D9;
+}
+body.th-yume .body { padding: 11px 22px 12px 16px; }
+body.th-yume .tag {
+  background: linear-gradient(90deg, #C9A0FF, #FF9CCB);
+  color: #FFFFFF;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(201, 160, 255, .5);
+  text-shadow: 0 1px 2px rgba(120, 60, 140, .3);
+}
+body.th-yume .overlay:not(.is-idle) .tag,
+body.th-yume .overlay .tag.tag-recruit { border-radius: 999px; box-shadow: 0 3px 10px rgba(201, 160, 255, .5); }
+body.th-yume .overlay .tag.tag-recruit.rc-open,
+body.th-yume .overlay.is-open .tag   { background: linear-gradient(90deg, #5FD6B8, #4FB8E8); color: #FFFFFF; }
+body.th-yume .overlay .tag.tag-recruit.rc-paused,
+body.th-yume .overlay.is-paused .tag { background: linear-gradient(90deg, #FFC46B, #FF9F6B); color: #FFFFFF; }
+body.th-yume .overlay .tag.tag-recruit.rc-closed,
+body.th-yume .overlay.is-closed .tag { background: linear-gradient(90deg, #FF5A76, #E8364F); color: #FFFFFF; }
+body.th-yume .name,
+body.th-yume .overlay.is-idle .name,
+body.th-yume .overlay.is-closed .name { color: #6A4A8C; text-shadow: 0 0 6px #FFFFFF, 0 0 2px #FFFFFF; }
+body.th-yume .deck,
+body.th-yume .overlay.is-open .deck,
+body.th-yume .overlay.is-paused .deck,
+body.th-yume .overlay.is-closed .deck { color: #A16BD8; }
+body.th-yume .room,
+body.th-yume .record { border-top: 1.5px dashed rgba(201, 160, 255, .7); }
+body.th-yume .room-tag,
+body.th-yume .overlay.is-open .room-tag { background: #FFFFFF; color: #A16BD8; border-radius: 999px; }
+body.th-yume .room-id { color: #8D6BE8; }
+body.th-yume .record { color: #9A7DB8; }
+body.th-yume .rec-win b  { color: #16A88E; }
+body.th-yume .rec-lose b { color: #E65497; }
+body.th-yume .rec-rate b { color: #8D6BE8; }
+body.th-yume .ov-icon { box-shadow: 0 0 0 3px #FFFFFF; margin-left: 14px; }
+
+/* ---------- ノート：罫線の紙とマスキングテープ ---------- */
+body.th-note .overlay {
+  background:
+    linear-gradient(90deg, transparent 9px, rgba(240, 169, 169, .9) 9px 10px, transparent 10px 13px, rgba(240, 169, 169, .9) 13px 14px, transparent 14px),
+    repeating-linear-gradient(180deg, transparent 0 25px, #D6E6F2 25px 26px),
+    #FBF8F0;
+  border-radius: 4px;
+  box-shadow: 0 5px 14px rgba(0, 0, 0, .35);
+  color: #2F3A4A;
+  overflow: visible;
+  margin-top: 10px;
+}
+body.th-note .overlay::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  width: 86px;
+  height: 20px;
+  margin-left: -43px;
+  background: rgba(255, 214, 102, .82);
+  transform: rotate(-3deg);
+}
+body.th-note .body { padding: 12px 18px 10px 24px; }
+body.th-note .tag {
+  background: transparent;
+  color: #E2483D;
+  border: 2px solid #E2483D;
+  border-radius: 50% / 60%;
+  box-shadow: none;
+}
+body.th-note .overlay:not(.is-idle) .tag { border-radius: 50% / 60%; box-shadow: none; }
+body.th-note .overlay .tag.tag-recruit { border-radius: 4px; box-shadow: none; transform: rotate(-1.5deg); }
+body.th-note .overlay .tag.tag-recruit.rc-open,
+body.th-note .overlay.is-open .tag   { background: #9EE6C4; color: #1E5E45; border-color: transparent; border-radius: 4px; }
+body.th-note .overlay .tag.tag-recruit.rc-paused,
+body.th-note .overlay.is-paused .tag { background: #FFE08A; color: #6B4E00; border-color: transparent; border-radius: 4px; }
+body.th-note .overlay .tag.tag-recruit.rc-closed,
+body.th-note .overlay.is-closed .tag { background: #E2483D; color: #FFFFFF; border-color: transparent; border-radius: 4px; }
+body.th-note .name,
+body.th-note .overlay.is-idle .name,
+body.th-note .overlay.is-closed .name { color: #2F3A4A; }
+body.th-note .deck,
+body.th-note .overlay.is-open .deck,
+body.th-note .overlay.is-paused .deck,
+body.th-note .overlay.is-closed .deck { color: #D9701A; }
+body.th-note .room,
+body.th-note .record { border-top: 1.5px dashed rgba(47, 58, 74, .35); }
+body.th-note .room-tag,
+body.th-note .overlay.is-open .room-tag { background: rgba(126, 214, 200, .75); color: #1F4E48; }
+body.th-note .room-id { color: #2F6FD0; }
+body.th-note .record { color: #5D6B7E; }
+body.th-note .rec-win b  { color: #E2483D; }
+body.th-note .rec-lose b { color: #2F6FD0; }
+body.th-note .rec-rate b { color: #D9701A; }
+body.th-note .ov-icon { box-shadow: 0 0 0 2px #FFFFFF, 0 2px 6px rgba(0, 0, 0, .2); margin-left: 22px; }
+
+/* ---------- レトロゲーム：ドット文字とRPGのウィンドウ ---------- */
+body.th-retro .overlay {
+  background: #1E1840;
+  border: 4px solid #FFFFFF;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 3px #1E1840, inset 0 0 0 5px rgba(255, 255, 255, .25);
+  color: #FFFFFF;
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px);
+}
+body.th-retro .body { padding: 11px 18px 11px 15px; }
+body.th-retro .tag,
+body.th-retro .overlay:not(.is-idle) .tag,
+body.th-retro .overlay .tag.tag-recruit {
+  border-radius: 0;
+  background: #FFFFFF;
+  color: #1E1840;
+  box-shadow: 3px 3px 0 #000000;
+  letter-spacing: .06em;
+}
+body.th-retro .overlay .tag.tag-recruit.rc-open,
+body.th-retro .overlay.is-open .tag   { background: #45F07F; color: #120F26; }
+body.th-retro .overlay .tag.tag-recruit.rc-paused,
+body.th-retro .overlay.is-paused .tag { background: #FFD93D; color: #120F26; }
+body.th-retro .overlay .tag.tag-recruit.rc-closed,
+body.th-retro .overlay.is-closed .tag { background: #FF4D6D; color: #FFFFFF; }
+body.th-retro .name,
+body.th-retro .overlay.is-idle .name,
+body.th-retro .overlay.is-closed .name { color: #FFD93D; text-shadow: 2px 2px 0 #E8436B; }
+body.th-retro .deck,
+body.th-retro .overlay.is-open .deck,
+body.th-retro .overlay.is-paused .deck,
+body.th-retro .overlay.is-closed .deck { color: #C3BEEA; }
+body.th-retro .room,
+body.th-retro .record { border-top: 2px dotted rgba(255, 255, 255, .45); }
+body.th-retro .room-tag,
+body.th-retro .overlay.is-open .room-tag { background: #FFFFFF; color: #1E1840; border-radius: 0; }
+body.th-retro .room-id { color: #45F07F; }
+body.th-retro .record { color: #B9B4E0; }
+body.th-retro .rec-win b  { color: #45F07F; }
+body.th-retro .rec-lose b { color: #FF5C7A; }
+body.th-retro .rec-rate b { color: #FFD93D; }
+body.th-retro .ov-icon { border-radius: 0; box-shadow: 0 0 0 3px #FFFFFF; margin-left: 14px; image-rendering: pixelated; }
+
+/* ---------- シック：生成りの紙と明朝体 ---------- */
+body.th-chic .overlay {
+  background: rgba(244, 239, 230, .97);
+  border: 1px solid #D3C8B5;
+  border-radius: 2px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, .35);
+  outline: 1px solid rgba(211, 200, 181, .9);
+  outline-offset: -6px;
+  color: #26231F;
+}
+body.th-chic .body { padding: 13px 20px 12px 18px; }
+body.th-chic .tag,
+body.th-chic .overlay:not(.is-idle) .tag {
+  background: transparent;
+  color: #26231F;
+  border: 1px solid #26231F;
+  border-radius: 1px;
+  box-shadow: none;
+  letter-spacing: .18em;
+}
+body.th-chic .overlay .tag.tag-recruit { border-radius: 1px; box-shadow: none; letter-spacing: .12em; border: 1px solid transparent; }
+body.th-chic .overlay .tag.tag-recruit.rc-open,
+body.th-chic .overlay.is-open .tag   { background: #4E6E4A; color: #FFFFFF; border-color: #4E6E4A; }
+body.th-chic .overlay .tag.tag-recruit.rc-paused,
+body.th-chic .overlay.is-paused .tag { background: #B88A3E; color: #FFFFFF; border-color: #B88A3E; }
+body.th-chic .overlay .tag.tag-recruit.rc-closed,
+body.th-chic .overlay.is-closed .tag { background: #A8402E; color: #FFFFFF; border-color: #A8402E; }
+body.th-chic .name,
+body.th-chic .overlay.is-idle .name,
+body.th-chic .overlay.is-closed .name { color: #26231F; letter-spacing: .04em; }
+body.th-chic .deck,
+body.th-chic .overlay.is-open .deck,
+body.th-chic .overlay.is-paused .deck,
+body.th-chic .overlay.is-closed .deck { color: #94703F; }
+body.th-chic .room,
+body.th-chic .record { border-top: 1px solid #D3C8B5; }
+body.th-chic .room-tag,
+body.th-chic .overlay.is-open .room-tag { background: transparent; color: #94703F; border: 1px solid #94703F; border-radius: 1px; }
+body.th-chic .room-id { color: #26231F; }
+body.th-chic .record { color: #6F675C; }
+body.th-chic .rec-win b  { color: #4E6E4A; }
+body.th-chic .rec-lose b { color: #A84B36; }
+body.th-chic .rec-rate b { color: #94703F; }
+body.th-chic .ov-icon { border-radius: 50%; box-shadow: 0 0 0 1px #D3C8B5; margin-left: 16px; }

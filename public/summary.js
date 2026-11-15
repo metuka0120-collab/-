@@ -4,19 +4,12 @@
    まとめ画像
    - 対戦履歴から、そのままSNSに貼れる1枚の画像をCanvasで描く。
    - 画面に見えているものが、そのまま保存されるPNGになる。
+   - 見た目（テーマ）は summary-themes.js、フォントの一覧は /font-list.js。
    ========================================================= */
 
 var state = { settings: {}, history: [], stats: {}, totalStats: {}, opponents: [] };
 
-/** 選べるフォント（Windows 10/11 に標準で入っているものだけ） */
-var FONTS = {
-  gothic:   '"Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif',
-  ud:       '"BIZ UDPGothic", "BIZ UDGothic", "Yu Gothic UI", "Meiryo", sans-serif',
-  mincho:   '"Yu Mincho", "BIZ UDPMincho", "MS PMincho", "Hiragino Mincho ProN", serif',
-  kyokasho: '"UD Digi Kyokasho NP-R", "UD Digi Kyokasho N-R", "Yu Gothic UI", sans-serif'
-};
-
-/** 選べるアクセント色（上のライン・勝率・デッキ名の色） */
+/** 選べるアクセント色（クラシックのテーマで使う） */
 var ACCENTS = {
   blue:   { bar: ['#45b6ff', '#a45cff'], dark: '#63b8ff', light: '#1f7ae0' },
   red:    { bar: ['#ff8a5c', '#ff4d6d'], dark: '#ff9270', light: '#d9483f' },
@@ -26,33 +19,28 @@ var ACCENTS = {
   mono:   { bar: ['#cfd6e6', '#8b93a8'], dark: '#c3cadb', light: '#5a6480' }
 };
 
-var FONT = FONTS.gothic;
+/** 文字の部位。フォントと大きさを、それぞれ別に変えられる */
+var PARTS = [
+  { id: 'title',   label: 'タイトル' },
+  { id: 'stats',   label: '数字・WIN/LOSE' },
+  { id: 'name',    label: 'リスナー名' },
+  { id: 'deck',    label: 'デッキ名' },
+  { id: 'comment', label: '感想・日付' },
+  { id: 'note',    label: 'ひとこと' }
+];
+
+/** 部位ごとの太さ（フォントに太字が無いときも、にせの太字にならないよう登録してある） */
+var PART_WEIGHT = { title: '700', stats: '700', name: '700', deck: '700', comment: '400', note: '400' };
+
+// 絵文字のスタンプを描くときのフォント
+var EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", "Yu Gothic UI", sans-serif';
+var FALLBACK_FONT = '"Yu Gothic UI", "Yu Gothic", "Meiryo", "Hiragino Sans", sans-serif';
+
 var WIDTH = 1200;   // 画像の横幅（px）
 var SCALE = 2;      // 高解像度で描いて縮小表示する
 
-var THEMES = {
-  dark: {
-    bg1: '#12141f', bg2: '#1d1636',
-    card: 'rgba(255,255,255,0.045)', cardLine: 'rgba(255,255,255,0.09)',
-    text: '#f2f5fb', muted: '#9aa5c0', dim: '#727d9b',
-    win: '#3fdc92', lose: '#ff6d79', accent: '#63b8ff',
-    chip: 'rgba(255,255,255,0.08)', line: 'rgba(255,255,255,0.13)',
-    winBg: 'rgba(63,220,146,0.18)', loseBg: 'rgba(255,109,121,0.18)',
-    comment: '#dbe2f2'
-  },
-  light: {
-    bg1: '#f4f7fc', bg2: '#e3e9f6',
-    card: '#ffffff', cardLine: '#d5dceb',
-    text: '#161a24', muted: '#5a6480', dim: '#8d96ab',
-    win: '#0f9d58', lose: '#d93843', accent: '#1f7ae0',
-    chip: '#eef1f7', line: '#dfe4ee',
-    winBg: 'rgba(15,157,88,0.13)', loseBg: 'rgba(217,56,67,0.13)',
-    comment: '#333a4a'
-  }
-};
-
 var opts = {
-  day: 'today', theme: 'dark', cols: 'auto',
+  day: 'today', cols: 'auto',
   deck: true, comment: true, myName: false, myDeck: false, h2h: false, stamps: true, icons: true,
   title: '', note: null
 };
@@ -94,7 +82,12 @@ function connect() {
   socket.addEventListener('message', function (event) {
     var message;
     try { message = JSON.parse(event.data); } catch (e) { return; }
-    if (message.type === 'state') { state = message.payload; refresh(); }
+    if (message.type === 'state') {
+      state = message.payload;
+      // まだ送っていない変更は、届いた状態の上に重ねておく
+      if (state.settings && state.settings.summary) Object.assign(state.settings.summary, pendingStyle);
+      refresh();
+    }
   });
   socket.addEventListener('close', function () {
     $('conn').textContent = '× 未接続（再接続します）';
@@ -140,12 +133,82 @@ function h2hOf(name) {
 }
 
 // ---------------------------------------------------------
-// 描画ヘルパー
+// テーマとフォント
 // ---------------------------------------------------------
-function setFont(ctx, size, weight) {
-  ctx.font = (weight || '') + ' ' + size + 'px ' + FONT;
+function currentStyle() {
+  return (state.settings && state.settings.summary) || {};
 }
 
+function currentThemeId() {
+  var id = currentStyle().theme;
+  return SUMMARY_THEMES[id] ? id : 'pop';
+}
+
+function fontInfo(id) {
+  var list = window.FONT_LIST || [];
+  for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  return null;
+}
+
+/** フォントの指定を、Canvas で使える書き方に直す */
+function fontStack(value) {
+  value = String(value || '');
+  if (value.indexOf('custom:') === 0) return '"' + value.slice(7).replace(/"/g, '') + '", ' + FALLBACK_FONT;
+  var info = fontInfo(value);
+  return info ? info.stack : FALLBACK_FONT;
+}
+
+/** 部位ごとに、実際に使うフォント（自分で選んだもの → テーマのおすすめ の順） */
+function partFont(part, theme) {
+  var chosen = (currentStyle().fonts || {})[part];
+  return chosen || theme.fonts[part] || 'gothic';
+}
+
+/** 部位ごとの大きさ（%） */
+function partScale(part) {
+  var v = Number((currentStyle().sizes || {})[part]);
+  return v >= 50 && v <= 250 ? v / 100 : 1;
+}
+
+var STACKS = {};   // 描いている最中の、部位ごとのフォント
+
+function setFont(ctx, size, part) {
+  ctx.font = (PART_WEIGHT[part] || '400') + ' ' + Math.round(size * 2) / 2 + 'px ' + (STACKS[part] || FALLBACK_FONT);
+}
+
+// ---------------------------------------------------------
+// フォントの読み込み
+//   同梱フォントは、使う文字のぶんだけ後から読み込まれる。
+//   まだ読めていない文字を描いたら読み込みを頼み、読めたら描き直す。
+// ---------------------------------------------------------
+var fontRequests = {};
+var redrawTimer = null;
+
+function scheduleDraw() {
+  clearTimeout(redrawTimer);
+  redrawTimer = setTimeout(draw, 40);
+}
+
+function needGlyphs(ctx, text) {
+  if (!document.fonts || !text) return;
+  var font = ctx.font;
+  try { if (document.fonts.check(font, text)) return; } catch (e) { return; }
+  var key = font + '|' + text;
+  if (fontRequests[key]) return;
+  fontRequests[key] = true;
+  document.fonts.load(font, text).then(scheduleDraw, function () { /* 読めなければ代わりの文字のまま */ });
+}
+
+/** 文字を描く（必要なら同梱フォントの読み込みも頼む） */
+function ft(ctx, text, x, y) {
+  text = String(text == null ? '' : text);
+  needGlyphs(ctx, text);
+  ctx.fillText(text, x, y);
+}
+
+// ---------------------------------------------------------
+// 文字のはみ出し対策
+// ---------------------------------------------------------
 /** 収まらない文字列を「…」で切り詰める */
 function fit(ctx, text, maxWidth) {
   text = String(text == null ? '' : text);
@@ -198,27 +261,6 @@ function wrapText(ctx, text, maxWidth, maxLines) {
   if (line) lines.push(line);
   return maxLines ? lines.slice(0, maxLines) : lines;
 }
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r);
-  else {
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-}
-
-/** 角丸の塗り（枠線は任意） */
-function panel(ctx, x, y, w, h, r, fill, stroke) {
-  roundRect(ctx, x, y, w, h, r);
-  if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.stroke(); }
-}
-
 
 // ---------------------------------------------------------
 // スタンプ画像の読み込み
@@ -312,7 +354,7 @@ function drawStamps(ctx, ids, leftX, centerY, size, gap) {
     if (stamp.type === 'emoji') {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      setFont(ctx, size, '');
+      ctx.font = size + 'px ' + EMOJI_FONT;
       ctx.fillText(stamp.char, x + size / 2, centerY);
       ctx.textAlign = 'left';
       ctx.textBaseline = 'alphabetic';
@@ -331,16 +373,21 @@ function draw() {
   var canvas = $('cv');
   var ctx = canvas.getContext('2d');
 
-  // 見た目の設定（フォント・アクセント色・ひとことの大きさ）を反映する
-  var style = (state.settings && state.settings.summary) || {};
-  FONT = FONTS[style.font] || FONTS.gothic;
+  var style = currentStyle();
+  var themeId = currentThemeId();
+  var theme = SUMMARY_THEMES[themeId];
+  var c = Object.assign({}, theme.c);
+
+  // クラシックのテーマだけ、アクセント色を選べる
   var accent = ACCENTS[style.accent] || ACCENTS.blue;
-  var noteSize = Number(style.noteSize) || 22;
+  if (theme.useAccent) c.accent = theme.light ? accent.light : accent.dark;
+
+  // 部位ごとのフォントと大きさ
+  PARTS.forEach(function (p) { STACKS[p.id] = fontStack(partFont(p.id, theme)); });
+  var S = {};
+  PARTS.forEach(function (p) { S[p.id] = partScale(p.id); });
+
   var noteText = opts.note != null ? opts.note : (style.note || '');
-
-  var t = Object.assign({}, THEMES[opts.theme] || THEMES.dark);
-  t.accent = opts.theme === 'light' ? accent.light : accent.dark;
-
   var background = style.background || {};
   var characters = Array.isArray(style.characters) ? style.characters : [];
 
@@ -361,18 +408,35 @@ function draw() {
   var total = allRecords.length;
   var rate = total ? Math.round((wins / total) * 1000) / 10 : 0;
 
-  // --- 行の高さを決める ---
+  // --- 大きさ ---
   var twoCol = opts.cols === '2' || (opts.cols === 'auto' && records.length > 12);
   var pad = 46;
   var gap = twoCol ? 22 : 0;
   var colW = twoCol ? (WIDTH - pad * 2 - gap) / 2 : WIDTH - pad * 2;
+  var rowGap = theme.gap != null ? theme.gap : 10;
 
-  var sz = twoCol
-    ? { name: 24, deck: 18, comment: 18, badge: 17, no: 16, rowPad: 12, lineGap: 24, stamp: 42 }
-    : { name: 28, deck: 21, comment: 20, badge: 19, no: 17, rowPad: 14, lineGap: 28, stamp: 56 };
+  var base = twoCol
+    ? { name: 24, deck: 18, comment: 18, badge: 17, no: 16, rowPad: 13, stamp: 42 }
+    : { name: 28, deck: 21, comment: 20, badge: 19, no: 17, rowPad: 15, stamp: 56 };
+  var sz = {
+    name: base.name * S.name,
+    deck: base.deck * S.deck,
+    comment: base.comment * S.comment,
+    badge: base.badge * S.stats,
+    no: base.no * S.stats,
+    rowPad: base.rowPad,
+    stamp: base.stamp
+  };
+  // 1行ぶんの高さ（文字の大きさに合わせて広がる）
+  var lh = {
+    name: Math.max(sz.name * 1.3, sz.badge * 1.75),
+    deck: sz.deck * 1.45,
+    comment: sz.comment * 1.5,
+    h2h: (sz.comment - 2) * 1.5
+  };
   var STAMP_GAP = 9;
-
-  var innerW = colW - 36;
+  var cardPadX = 20;
+  var innerW = colW - cardPadX * 2;
   var STAMP_MARGIN = 18;
 
   // 各行の高さ（内容によって変わる）
@@ -386,7 +450,7 @@ function draw() {
     // 感想は「…」で切らず、入りきらなければ折り返して行を増やす
     var commentLines = [];
     if (opts.comment && r.comment) {
-      setFont(ctx, sz.comment, '');
+      setFont(ctx, sz.comment, 'comment');
       commentLines = wrapText(ctx, '「' + r.comment + '」', textW, 0);
     }
 
@@ -404,10 +468,12 @@ function draw() {
     var showMyDeck = !!(perRowMyDeck && r.myDeck);
     var deckLine = !!(deckText || showMyDeck);
 
-    var lines = 1 + (deckLine ? 1 : 0) + commentLines.length + (h2hText ? 1 : 0);
-    var height = sz.rowPad * 2 + lines * sz.lineGap;
+    var height = sz.rowPad * 2 + lh.name +
+      (deckLine ? lh.deck : 0) +
+      commentLines.length * lh.comment +
+      (h2hText ? lh.h2h : 0);
     // スタンプが行からはみ出さないだけの高さは確保する
-    if (stampIds.length) height = Math.max(height, sz.stamp + 22);
+    if (stampIds.length) height = Math.max(height, sz.stamp + 24);
 
     return {
       r: r, commentLines: commentLines, h2hText: h2hText,
@@ -421,22 +487,37 @@ function draw() {
     var half = Math.ceil(rows.length / 2);
     rows.forEach(function (row, i) {
       row.col = i < half ? 0 : 1;
-      colHeights[row.col] += row.h + 10;
+      colHeights[row.col] += row.h + rowGap;
     });
   } else {
-    rows.forEach(function (row) { row.col = 0; colHeights[0] += row.h + 10; });
+    rows.forEach(function (row) { row.col = 0; colHeights[0] += row.h + rowGap; });
   }
 
-  var headerH = 178;
+  // --- 見出しの大きさ ---
+  var titleSize = 40 * S.title;
+  var subSize = 22 * S.comment;
+  var statNum = 44 * S.stats;
+  var statLabel = 15 * Math.max(0.8, S.stats * 0.9);
+  var boxW = 380;
+  var boxH = Math.round(statNum + statLabel + 46);
+  var boxY = 44;
+
+  var titleBase = 40 + titleSize;
+  var subBase = titleBase + subSize * 1.55;
+  var deckBase = subBase + subSize * 1.3;
+  var hasHeaderDeck = opts.myDeck && (headerMyDeck || myDeckSet.length > 1);
+  var headerBottom = Math.max(boxY + boxH, hasHeaderDeck ? deckBase + 8 : subBase + 8);
+  var headerH = Math.round(headerBottom + 34);
 
   // ひとことは枠の中に入れる。折り返して切れないようにする
-  var NOTE_PAD_V = 18;   // 枠の内側の上下の余白
-  var NOTE_PAD_H = 26;   // 枠の内側の左右の余白
-  setFont(ctx, noteSize, '');
+  var noteSize = 22 * S.note;
+  var NOTE_PAD_V = 20;
+  var NOTE_PAD_H = 30;
+  setFont(ctx, noteSize, 'note');
   var noteLines = noteText ? wrapText(ctx, noteText, WIDTH - pad * 2 - NOTE_PAD_H * 2, 0) : [];
   var noteLineH = Math.round(noteSize * 1.5);
   var noteBoxH = noteLines.length ? noteLines.length * noteLineH + NOTE_PAD_V * 2 : 0;
-  var noteH = noteBoxH ? noteBoxH + 16 : 0;
+  var noteH = noteBoxH ? noteBoxH + 22 : 0;
   var overflowH = overflow > 0 ? 40 : 0;
   var listH = Math.max(colHeights[0], colHeights[1]);
   var height = headerH + (total ? listH + 18 : 120) + overflowH + noteH + pad;
@@ -450,11 +531,7 @@ function draw() {
   layout.height = Math.round(height);
 
   // --- 背景 ---
-  var bg = ctx.createLinearGradient(0, 0, WIDTH, height);
-  bg.addColorStop(0, t.bg1);
-  bg.addColorStop(1, t.bg2);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0, 0, WIDTH, height);
+  theme.background(ctx, WIDTH, height, c);
 
   // 背景画像（下地の上に重ねる）
   if (background.file) {
@@ -464,75 +541,97 @@ function draw() {
     }
   }
 
-  // 上端のアクセントライン
-  var accentBar = ctx.createLinearGradient(0, 0, WIDTH, 0);
-  accentBar.addColorStop(0, accent.bar[0]);
-  accentBar.addColorStop(1, accent.bar[1]);
-  ctx.fillStyle = accentBar;
-  ctx.fillRect(0, 0, WIDTH, 6);
+  if (theme.decorate) theme.decorate(ctx, WIDTH, height, c);
+
+  // 上端のアクセントライン（クラシック）
+  if (theme.topBar) {
+    var accentBar = ctx.createLinearGradient(0, 0, WIDTH, 0);
+    accentBar.addColorStop(0, accent.bar[0]);
+    accentBar.addColorStop(1, accent.bar[1]);
+    ctx.fillStyle = accentBar;
+    ctx.fillRect(0, 0, WIDTH, 6);
+  }
 
   // --- ヘッダー ---
+  var titleMaxW = WIDTH - pad * 2 - boxW - 40;
   var title = (opts.title || state.settings.streamTitle || '視聴者参加型対戦').trim();
   ctx.textAlign = 'left';
-  setFont(ctx, 40, 'bold');
-  ctx.fillStyle = t.text;
-  ctx.fillText(fit(ctx, title, WIDTH - pad * 2 - 430), pad, 84);
+  setFont(ctx, titleSize, 'title');
+  var hasSpacing = ctx.letterSpacing !== undefined;
+  if (theme.titleSpacing && hasSpacing) ctx.letterSpacing = theme.titleSpacing + 'px';
+  var titleShown = fit(ctx, title, titleMaxW);
+  var titleW = ctx.measureText(titleShown).width;
 
-  setFont(ctx, 22, '');
-  ctx.fillStyle = t.muted;
+  if (theme.behindTitle) theme.behindTitle(ctx, pad, titleBase, titleW, titleSize, c);
+  if (theme.titleShadow) {
+    ctx.fillStyle = theme.titleShadow.color;
+    ft(ctx, titleShown, pad + theme.titleShadow.x, titleBase + theme.titleShadow.y);
+  }
+  if (theme.titleStroke) {
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = theme.titleStroke.width;
+    ctx.strokeStyle = theme.titleStroke.color;
+    ctx.strokeText(titleShown, pad, titleBase);
+  }
+  ctx.fillStyle = theme.titleColor || c.text;
+  ft(ctx, titleShown, pad, titleBase);
+  if (hasSpacing) ctx.letterSpacing = '0px';
+  if (theme.afterTitle) theme.afterTitle(ctx, pad + titleW, titleBase, titleSize, c);
+  if (theme.afterTitleUnderline) theme.afterTitleUnderline(ctx, pad, titleBase, titleW, titleSize, c);
+
+  setFont(ctx, subSize, 'comment');
+  ctx.fillStyle = c.muted;
   var dateLabel = opts.day === 'all' ? '通算成績' : jpDate(opts.day);
   var who = opts.myName && state.settings.myName ? '　/　' + state.settings.myName : '';
-  ctx.fillText(fit(ctx, dateLabel + who, WIDTH - pad * 2 - 430), pad, 118);
+  ft(ctx, fit(ctx, dateLabel + who, titleMaxW), pad, subBase);
 
-  if (opts.myDeck && headerMyDeck) {
-    setFont(ctx, 19, '');
-    ctx.fillStyle = t.dim;
-    ctx.fillText(fit(ctx, '自分の使用デッキ：' + headerMyDeck, WIDTH - pad * 2 - 430), pad, 147);
-  } else if (opts.myDeck && myDeckSet.length > 1) {
-    setFont(ctx, 19, '');
-    ctx.fillStyle = t.dim;
-    ctx.fillText(fit(ctx, '自分の使用デッキ：' + myDeckSet.length + '種類', WIDTH - pad * 2 - 430), pad, 147);
+  if (hasHeaderDeck) {
+    setFont(ctx, subSize * 0.86, 'comment');
+    ctx.fillStyle = c.dim;
+    var deckLabel = headerMyDeck ? '自分の使用デッキ：' + headerMyDeck : '自分の使用デッキ：' + myDeckSet.length + '種類';
+    ft(ctx, fit(ctx, deckLabel, titleMaxW), pad, deckBase);
   }
 
   // --- 成績（右上） ---
-  var boxW = 380, boxH = 104, boxX = WIDTH - pad - boxW, boxY = 44;
-  panel(ctx, boxX, boxY, boxW, boxH, 14, t.card, t.cardLine);
+  var boxX = WIDTH - pad - boxW;
+  theme.statsBox(ctx, boxX, boxY, boxW, boxH, c);
 
   ctx.textAlign = 'center';
   var cellW = boxW / 3;
+  var numBase = boxY + 20 + statNum * 0.95;
 
-  setFont(ctx, 44, 'bold');
-  ctx.fillStyle = t.win;
-  ctx.fillText(String(wins), boxX + cellW * 0.5, boxY + 62);
-  ctx.fillStyle = t.lose;
-  ctx.fillText(String(losses), boxX + cellW * 1.5, boxY + 62);
-  ctx.fillStyle = t.accent;
-  setFont(ctx, 34, 'bold');
-  ctx.fillText(rate + '%', boxX + cellW * 2.5, boxY + 60);
+  // 字幅の広いフォントや大きな数字でも、枠からはみ出さないように縮める
+  function statText(text, size, color, cx, y) {
+    setFont(ctx, size, 'stats');
+    var w = ctx.measureText(text).width;
+    if (w > cellW - 18) setFont(ctx, size * (cellW - 18) / w, 'stats');
+    ctx.fillStyle = color;
+    ft(ctx, text, cx, y);
+  }
+  statText(String(wins), statNum, c.win, boxX + cellW * 0.5, numBase);
+  statText(String(losses), statNum, c.lose, boxX + cellW * 1.5, numBase);
+  statText(rate + '%', statNum * 0.77, c.accent, boxX + cellW * 2.5, numBase - 2);
 
-  setFont(ctx, 15, '');
-  ctx.fillStyle = t.dim;
-  ctx.fillText('WIN', boxX + cellW * 0.5, boxY + 86);
-  ctx.fillText('LOSE', boxX + cellW * 1.5, boxY + 86);
-  ctx.fillText('勝率（全' + total + '戦）', boxX + cellW * 2.5, boxY + 86);
+  setFont(ctx, statLabel, 'comment');
+  ctx.fillStyle = c.dim;
+  var labelBase = numBase + statLabel + 10;
+  ft(ctx, 'WIN', boxX + cellW * 0.5, labelBase);
+  ft(ctx, 'LOSE', boxX + cellW * 1.5, labelBase);
+  ft(ctx, '勝率（全' + total + '戦）', boxX + cellW * 2.5, labelBase);
 
   // --- 区切り線 ---
-  ctx.strokeStyle = t.line;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(pad, headerH - 16);
-  ctx.lineTo(WIDTH - pad, headerH - 16);
-  ctx.stroke();
+  theme.divider(ctx, pad, WIDTH - pad, headerH - 16, c);
 
   // --- 対戦一覧 ---
   ctx.textAlign = 'left';
   if (!total) {
-    setFont(ctx, 24, '');
-    ctx.fillStyle = t.dim;
+    setFont(ctx, 24, 'comment');
+    ctx.fillStyle = c.dim;
     ctx.textAlign = 'center';
-    ctx.fillText('この日の対戦記録はまだありません', WIDTH / 2, headerH + 60);
+    ft(ctx, 'この日の対戦記録はまだありません', WIDTH / 2, headerH + 60);
   } else {
     var cursorY = [headerH + 8, headerH + 8];
+    var indexInCol = [0, 0];
 
     rows.forEach(function (row) {
       var r = row.r;
@@ -542,31 +641,24 @@ function draw() {
       var isWin = r.result === 'win';
 
       // 行の下地
-      panel(ctx, x, y, colW, row.h, 11, t.card, t.cardLine);
-      // 左端の勝敗ライン
-      ctx.fillStyle = isWin ? t.win : t.lose;
-      roundRect(ctx, x, y, 5, row.h, 3);
-      ctx.fill();
+      theme.card(ctx, x, y, colW, row.h, isWin, c, indexInCol[col]);
 
-      var innerX = x + 18;
+      var innerX = x + cardPadX;
       var textW = row.textW;
-      var lineY = y + sz.rowPad + sz.lineGap - 8;
+      var lineY = y + sz.rowPad + lh.name * 0.74;
 
       // 1行目：番号 / 勝敗 / 名前
-      setFont(ctx, sz.no, 'bold');
-      ctx.fillStyle = t.dim;
+      setFont(ctx, sz.no, 'stats');
+      ctx.fillStyle = c.dim;
       var noText = r.matchNumber ? String(r.matchNumber) : '-';
       var noW = ctx.measureText(noText).width;
-      ctx.fillText(noText, innerX, lineY);
+      ft(ctx, noText, innerX, lineY);
 
       var badgeX = innerX + noW + 12;
-      var badgeW = sz.badge * 3.4;
-      var badgeH = sz.badge + 12;
-      panel(ctx, badgeX, lineY - sz.badge - 2, badgeW, badgeH, 6, isWin ? t.winBg : t.loseBg, null);
-      setFont(ctx, sz.badge, 'bold');
-      ctx.fillStyle = isWin ? t.win : t.lose;
-      ctx.textAlign = 'center';
-      ctx.fillText(isWin ? 'WIN' : 'LOSE', badgeX + badgeW / 2, lineY + 1);
+      setFont(ctx, sz.badge, 'stats');
+      var badgeW = theme.badge(ctx, badgeX, lineY, isWin, c, sz.badge, function (text, bx, by) {
+        ft(ctx, text, bx, by);
+      });
       ctx.textAlign = 'left';
 
       // スタンプは行の右端に、行の高さいっぱいの大きさで縦中央に置く
@@ -581,69 +673,70 @@ function draw() {
         var iconSize = Math.round(sz.name * 1.15);
         var iconImg = stampImage(r.icon);
         if (iconImg) {
-          drawCircleImage(ctx, iconImg, nameX, lineY - iconSize * 0.78, iconSize);
+          drawCircleImage(ctx, iconImg, nameX, lineY - iconSize * 0.8, iconSize);
         }
         nameX += iconSize + 10;
       }
 
-      setFont(ctx, sz.name, 'bold');
-      ctx.fillStyle = t.text;
-      ctx.fillText(fit(ctx, r.name, innerX + textW - nameX), nameX, lineY + 2);
+      setFont(ctx, sz.name, 'name');
+      ctx.fillStyle = c.text;
+      ft(ctx, fit(ctx, r.name, innerX + textW - nameX), nameX, lineY + 2);
 
       // 2行目：デッキ（書くことが無ければこの行ごと出さない）
+      var cursor = y + sz.rowPad + lh.name;
       if (row.deckLine) {
-        lineY += sz.lineGap;
-        var deckX = innerX;
-        setFont(ctx, sz.deck, 'bold');
-        ctx.fillStyle = t.accent;
+        var deckY = cursor + lh.deck * 0.76;
+        cursor += lh.deck;
+        setFont(ctx, sz.deck, 'deck');
+        ctx.fillStyle = c.accent;
         var maxDeckW = textW * (row.showMyDeck ? 0.5 : 1) - 10;
         var shown = row.deckText ? fit(ctx, row.deckText, maxDeckW) : '';
         var usedW = 0;
         if (shown) {
-          ctx.fillText(shown, deckX, lineY);
+          ft(ctx, shown, innerX, deckY);
           usedW = ctx.measureText(shown).width;
         }
 
         if (row.showMyDeck) {
-          setFont(ctx, sz.deck - 2, '');
-          ctx.fillStyle = t.dim;
+          setFont(ctx, sz.deck * 0.9, 'comment');
+          ctx.fillStyle = c.dim;
           var vs = shown ? '  vs  自分：' : '自分：';
-          ctx.fillText(vs, deckX + usedW, lineY);
+          ft(ctx, vs, innerX + usedW, deckY);
           var vsW = ctx.measureText(vs).width;
-          ctx.fillStyle = t.muted;
-          ctx.fillText(fit(ctx, r.myDeck, textW - usedW - vsW), deckX + usedW + vsW, lineY);
+          ctx.fillStyle = c.muted;
+          ft(ctx, fit(ctx, r.myDeck, textW - usedW - vsW), innerX + usedW + vsW, deckY);
         }
       }
 
       // 3行目以降：感想（長ければ折り返す）
       if (row.commentLines.length) {
-        setFont(ctx, sz.comment, '');
-        ctx.fillStyle = t.comment;
+        setFont(ctx, sz.comment, 'comment');
+        ctx.fillStyle = c.comment;
         for (var ci = 0; ci < row.commentLines.length; ci++) {
-          lineY += sz.lineGap;
-          ctx.fillText(row.commentLines[ci], innerX, lineY);
+          ft(ctx, row.commentLines[ci], innerX, cursor + lh.comment * 0.76);
+          cursor += lh.comment;
         }
       }
 
       // 4行目：そのリスナーとの通算
       if (row.h2hText) {
-        lineY += sz.lineGap;
-        setFont(ctx, sz.comment - 2, '');
-        ctx.fillStyle = t.dim;
-        ctx.fillText(fit(ctx, row.h2hText, textW), innerX, lineY);
+        setFont(ctx, sz.comment - 2, 'comment');
+        ctx.fillStyle = c.dim;
+        ft(ctx, fit(ctx, row.h2hText, textW), innerX, cursor + lh.h2h * 0.76);
       }
 
-      cursorY[col] += row.h + 10;
+      cursorY[col] += row.h + rowGap;
+      indexInCol[col]++;
     });
   }
 
   // --- 入りきらなかった試合 ---
   if (overflow > 0) {
-    setFont(ctx, 19, '');
-    ctx.fillStyle = t.dim;
+    setFont(ctx, 19, 'comment');
+    ctx.fillStyle = c.dim;
     ctx.textAlign = 'center';
-    ctx.fillText('…ほか ' + overflow + '戦（成績は全' + total + '戦ぶんを集計しています）',
-      WIDTH / 2, headerH + Math.max(colHeights[0], colHeights[1]) + 30);
+    ft(ctx, '…ほか ' + overflow + '戦（成績は全' + total + '戦ぶんを集計しています）',
+      WIDTH / 2, headerH + listH + 30);
     ctx.textAlign = 'left';
   }
 
@@ -662,14 +755,15 @@ function draw() {
   // --- ひとこと（枠つき） ---
   if (noteLines.length) {
     var noteBoxY = height - pad - noteBoxH;
-    panel(ctx, pad, noteBoxY, WIDTH - pad * 2, noteBoxH, 12, t.card, t.cardLine);
+    theme.note(ctx, pad, noteBoxY, WIDTH - pad * 2, noteBoxH, c);
 
-    setFont(ctx, noteSize, '');
-    ctx.fillStyle = t.comment;
+    setFont(ctx, noteSize, 'note');
+    ctx.fillStyle = theme.noteColor || c.comment;
+    if (themeId === 'retro') ctx.fillStyle = c.text;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (var ni = 0; ni < noteLines.length; ni++) {
-      ctx.fillText(noteLines[ni], WIDTH / 2, noteBoxY + NOTE_PAD_V + noteLineH * (ni + 0.5));
+      ft(ctx, noteLines[ni], WIDTH / 2, noteBoxY + NOTE_PAD_V + noteLineH * (ni + 0.5));
     }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
@@ -708,10 +802,7 @@ function refresh() {
   var style = state.settings.summary;
   if (style && !styleLoaded) {
     styleLoaded = true;
-    $('o-font').value = style.font || 'gothic';
     $('o-accent').value = style.accent || 'blue';
-    $('o-note-size').value = style.noteSize || 22;
-    $('o-note-size-label').textContent = style.noteSize || 22;
     if (style.note) { $('o-note').value = style.note; opts.note = style.note; }
 
     var bg = style.background || {};
@@ -723,6 +814,7 @@ function refresh() {
 
   refreshImageOptions();
   renderCharacters();
+  renderDesignControls();
   draw();
 }
 
@@ -739,7 +831,6 @@ function fileName() {
 function say(text) { $('msg').textContent = text; }
 
 $('o-day').addEventListener('change', function (e) { opts.day = e.target.value; draw(); });
-$('o-theme').addEventListener('change', function (e) { opts.theme = e.target.value; draw(); });
 $('o-cols').addEventListener('change', function (e) { opts.cols = e.target.value; draw(); });
 $('o-deck').addEventListener('change', function (e) { opts.deck = e.target.checked; draw(); });
 $('o-comment').addEventListener('change', function (e) { opts.comment = e.target.checked; draw(); });
@@ -752,23 +843,26 @@ $('o-title').addEventListener('input', function (e) { opts.title = e.target.valu
 
 /** 見た目の設定を保存する（打つたびに保存しないよう少し待つ） */
 var saveTimer = null;
+var pendingStyle = {};   // まだ送っていない変更（続けて変えても、どれも取りこぼさない）
 function saveStyle(patch) {
   var target = (state.settings && state.settings.summary) || {};
   Object.assign(target, patch);
   if (state.settings) state.settings.summary = target;
+  Object.assign(pendingStyle, patch);
   draw();
 
   clearTimeout(saveTimer);
   saveTimer = setTimeout(function () {
+    var body = pendingStyle;
+    pendingStyle = {};
     fetch('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary: patch })
+      body: JSON.stringify({ summary: body })
     }).catch(function () { /* 保存できなくても表示は続けられる */ });
   }, 500);
 }
 
-$('o-font').addEventListener('change', function (e) { saveStyle({ font: e.target.value }); });
 $('o-accent').addEventListener('change', function (e) { saveStyle({ accent: e.target.value }); });
 
 $('o-note').addEventListener('input', function (e) {
@@ -776,14 +870,15 @@ $('o-note').addEventListener('input', function (e) {
   saveStyle({ note: e.target.value });
 });
 
-$('o-note-size').addEventListener('input', function (e) {
-  $('o-note-size-label').textContent = e.target.value;
-  saveStyle({ noteSize: Number(e.target.value) });
-});
+/** フォントを読み終えてから描き直し、画像にする */
+function withFreshCanvas(done) {
+  var ready = document.fonts && document.fonts.ready ? document.fonts.ready : Promise.resolve();
+  ready.then(function () { draw(); done(); });
+}
 
 $('download').addEventListener('click', function () {
   var name = fileName();
-  $('cv').toBlob(function (blob) {
+  withFreshCanvas(function () { $('cv').toBlob(function (blob) {
     if (!blob) { say('画像を作れませんでした。もう一度お試しください。'); return; }
     var url = URL.createObjectURL(blob);
     var link = document.createElement('a');
@@ -795,7 +890,7 @@ $('download').addEventListener('click', function () {
     // すぐ消すとダウンロードが始まらないブラウザがあるので少し待つ
     setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
     say('保存しました：' + name);
-  }, 'image/png');
+  }, 'image/png'); });
 });
 
 $('copy').addEventListener('click', function () {
@@ -803,14 +898,14 @@ $('copy').addEventListener('click', function () {
     say('このブラウザではコピーできません。「PNG画像として保存」を使ってください。');
     return;
   }
-  $('cv').toBlob(function (blob) {
+  withFreshCanvas(function () { $('cv').toBlob(function (blob) {
     if (!blob) { say('コピーに失敗しました。「PNG画像として保存」を使ってください。'); return; }
     navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(function () {
       say('コピーしました。X（Twitter）の投稿欄で Ctrl + V を押すと貼れます。');
     }).catch(function () {
       say('コピーできませんでした。「PNG画像として保存」を使ってください。');
     });
-  }, 'image/png');
+  }, 'image/png'); });
 });
 
 
@@ -981,6 +1076,170 @@ window.addEventListener('mouseup', function () {
   $('cv').classList.remove('dragging');
 });
 
+// ---------------------------------------------------------
+// デザイン（テーマ・フォント・大きさ）の操作
+// ---------------------------------------------------------
+var ui = { part: 'title' };
+
+/** 中身が変わったときだけ書き換える（見本のフォントを読み直させないため） */
+function setHtml(id, html) {
+  var el = $(id);
+  if (el.__html === html) return;
+  el.__html = html;
+  el.innerHTML = html;
+}
+
+/** テーマ・部位・フォントの選択欄を、いまの設定に合わせて描く */
+function renderDesignControls() {
+  var style = currentStyle();
+  var themeId = currentThemeId();
+  var theme = SUMMARY_THEMES[themeId];
+
+  // テーマ
+  setHtml('theme-grid', SUMMARY_THEME_ORDER.map(function (id) {
+    var t = SUMMARY_THEMES[id];
+    var bars = t.swatch.map(function (color) { return '<i style="background:' + color + '"></i>'; }).join('');
+    return '<button type="button" class="theme-btn' + (id === themeId ? ' on' : '') + '" data-theme="' + id + '">' +
+      '<span class="theme-sw">' + bars + '</span>' +
+      '<span class="theme-name">' + esc(t.label) + '</span>' +
+      '<span class="theme-desc">' + esc(t.desc) + '</span>' +
+    '</button>';
+  }).join(''));
+  $('accent-field').hidden = !theme.useAccent;
+
+  // 部位
+  var sizes = style.sizes || {};
+  setHtml('part-tabs', PARTS.map(function (p) {
+    var changed = (style.fonts && style.fonts[p.id]) || (sizes[p.id] && sizes[p.id] !== 100);
+    return '<button type="button" class="part-tab' + (p.id === ui.part ? ' on' : '') + (changed ? ' changed' : '') +
+      '" data-part="' + p.id + '">' + esc(p.label) + '</button>';
+  }).join(''));
+
+  var partLabel = PARTS.filter(function (p) { return p.id === ui.part; })[0].label;
+  $('part-name').textContent = partLabel;
+  var size = Number(sizes[ui.part]) || 100;
+  if (document.activeElement !== $('part-size')) $('part-size').value = size;
+  $('part-size-label').textContent = size;
+
+  // フォント
+  var chosen = (style.fonts || {})[ui.part] || '';
+  var recommended = theme.fonts[ui.part];
+  var recInfo = fontInfo(recommended);
+  var list = window.FONT_LIST || [];
+  var sample = sampleText(ui.part);
+
+  function chip(value, label, stack, sub) {
+    return '<button type="button" class="font-chip' + (value === chosen ? ' on' : '') + '" data-font="' + esc(value) + '">' +
+      '<span class="font-sample" style="font-family:' + esc(stack) + '">' + esc(sample) + '</span>' +
+      '<span class="font-label">' + esc(label) + (sub ? '<em>' + esc(sub) + '</em>' : '') + '</span>' +
+    '</button>';
+  }
+
+  var html = chip('', 'おまかせ', recInfo ? recInfo.stack : FALLBACK_FONT, recInfo ? recInfo.label : '');
+  html += '<div class="font-group">アプリに入っているフォント</div>';
+  html += list.filter(function (f) { return f.group === 'bundled'; })
+    .map(function (f) { return chip(f.id, f.label, f.stack); }).join('');
+  html += '<div class="font-group">Windows のフォント</div>';
+  html += list.filter(function (f) { return f.group === 'windows'; })
+    .map(function (f) { return chip(f.id, f.label, f.stack); }).join('');
+  if (chosen.indexOf('custom:') === 0) {
+    html += '<div class="font-group">PCのフォント</div>' + chip(chosen, chosen.slice(7), fontStack(chosen));
+  }
+  setHtml('font-grid', html);
+}
+
+/** フォント見本に出す文字（部位に合わせる） */
+function sampleText(part) {
+  // ひらがなが入っている方が、フォントのちがいが分かりやすい
+  if (part === 'stats') return 'WIN 12 58%';
+  if (part === 'deck') return 'まどうぐ魔導具';
+  if (part === 'title') return 'みんなで対戦';
+  if (part === 'note') return 'ありがとう！';
+  if (part === 'comment') return 'たのしかった';
+  return 'あおいむし';
+}
+
+function saveFonts(patch) {
+  var fonts = Object.assign({}, currentStyle().fonts || {}, patch);
+  saveStyle({ fonts: fonts });
+  renderDesignControls();
+}
+
+$('theme-grid').addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-theme]');
+  if (!btn) return;
+  saveStyle({ theme: btn.dataset.theme });
+  renderDesignControls();
+});
+
+$('part-tabs').addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-part]');
+  if (!btn) return;
+  ui.part = btn.dataset.part;
+  renderDesignControls();
+});
+
+$('part-size').addEventListener('input', function (e) {
+  var sizes = Object.assign({}, currentStyle().sizes || {});
+  sizes[ui.part] = Number(e.target.value);
+  $('part-size-label').textContent = e.target.value;
+  saveStyle({ sizes: sizes });
+});
+$('part-size').addEventListener('change', renderDesignControls);
+
+$('font-grid').addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-font]');
+  if (!btn) return;
+  var patch = {};
+  patch[ui.part] = btn.dataset.font;
+  saveFonts(patch);
+});
+
+function useCustomFont() {
+  var name = $('custom-font').value.replace(/["'`\;{}<>()]/g, '').trim();
+  if (!name) { $('custom-font-hint').textContent = 'フォント名を入れてください。'; return; }
+  var installed = true;
+  try { installed = document.fonts.check('16px "' + name + '"', 'あ'); } catch (err) { /* 調べられなくても使う */ }
+  var patch = {};
+  patch[ui.part] = 'custom:' + name.slice(0, 40);
+  saveFonts(patch);
+  $('custom-font-hint').textContent = '「' + name + '」を使いました。見た目が変わらないときは、名前がPCのフォントと合っているか確かめてください。';
+  if (!installed) $('custom-font-hint').textContent += '（このPCでは見つからないかもしれません）';
+}
+$('custom-font-use').addEventListener('click', useCustomFont);
+$('custom-font').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); useCustomFont(); } });
+
+// PCに入っているフォントの一覧（使えるブラウザだけ。許可を聞かれます）
+if (window.queryLocalFonts) {
+  $('local-fonts').hidden = false;
+  $('local-fonts').addEventListener('click', function () {
+    window.queryLocalFonts().then(function (fonts) {
+      var names = [];
+      fonts.forEach(function (f) { if (names.indexOf(f.family) === -1) names.push(f.family); });
+      names.sort(function (a, b) { return a.localeCompare(b, 'ja'); });
+      $('custom-font-list').innerHTML = names.map(function (n) { return '<option value="' + esc(n) + '">'; }).join('');
+      $('custom-font-hint').textContent = names.length + '個のフォントが見つかりました。上の欄をクリックすると選べます。';
+    }).catch(function () {
+      $('custom-font-hint').textContent = 'フォント一覧を読めませんでした。名前を直接入れてください。';
+    });
+  });
+}
+
+$('font-all').addEventListener('click', function () {
+  var current = ((currentStyle().fonts || {})[ui.part]) || SUMMARY_THEMES[currentThemeId()].fonts[ui.part];
+  var fonts = {};
+  PARTS.forEach(function (p) { fonts[p.id] = current; });
+  saveStyle({ fonts: fonts });
+  renderDesignControls();
+});
+
+$('font-reset').addEventListener('click', function () {
+  var fonts = {}, sizes = {};
+  PARTS.forEach(function (p) { fonts[p.id] = ''; sizes[p.id] = 100; });
+  saveStyle({ fonts: fonts, sizes: sizes });
+  renderDesignControls();
+});
+
 // フォントが読み込まれてから描き直す（文字幅がずれないように）
 if (document.fonts && document.fonts.ready) document.fonts.ready.then(draw);
 
@@ -988,5 +1247,6 @@ fetch('/api/state').then(function (r) { return r.json(); }).then(function (data)
   if (data && data.ok) { state = data.state; refresh(); }
 }).catch(function () { /* WebSocket接続時に届く */ });
 
+renderDesignControls();
 draw();
 connect();

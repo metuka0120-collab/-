@@ -21,9 +21,10 @@ const { listStamps, STAMP_DIR } = require('./lib/stamps');
 const { OneCommeClient } = require('./lib/onecomme');
 const { cacheIcon, ICON_DIR } = require('./lib/icons');
 const { listImages, IMAGE_DIR } = require('./lib/images');
+const { fontList, fontCss, FONTSOURCE_DIR } = require('./lib/fonts');
 
 // 画面に出すバージョン。更新したファイルで動いているか一目で分かるようにする
-const APP_VERSION = '1.1.2 (2026-11-15)';
+const APP_VERSION = '1.2.0 (2026-11-15)';
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -48,6 +49,24 @@ app.use('/stamps', express.static(STAMP_DIR, { index: false, dotfiles: 'ignore' 
 app.use('/icons', express.static(ICON_DIR, { index: false, dotfiles: 'ignore' }));
 // images/ に置いた背景・キャラ画像を配る
 app.use('/images', express.static(IMAGE_DIR, { index: false, dotfiles: 'ignore' }));
+
+// 同梱フォント。中身は変わらないので、ブラウザに覚えておいてもらう
+app.use('/fontsource', (req, res, next) => {
+  if (!/\.woff2$/i.test(req.path)) return res.status(404).end();
+  next();
+}, express.static(FONTSOURCE_DIR, { index: false, dotfiles: 'ignore', maxAge: '30d', immutable: true }));
+
+// フォントの @font-face と、選べるフォントの一覧
+app.get('/fonts.css', (req, res) => {
+  noStore(res);
+  // ?ids=zenmaru,dot のように、使うものだけに絞れる（OBS表示を軽くするため）
+  const ids = typeof req.query.ids === 'string' ? req.query.ids.split(',').slice(0, 12) : null;
+  res.type('text/css').send(fontCss(ids));
+});
+app.get('/font-list.js', (req, res) => {
+  noStore(res);
+  res.type('application/javascript').send('window.FONT_LIST = ' + JSON.stringify(fontList()) + ';\n');
+});
 
 // ---------------------------------------------------------------
 // 画面

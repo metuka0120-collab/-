@@ -6,6 +6,7 @@
 <title>まとめ画像 | デュエマプレイス 配信ツール</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🎴</text></svg>">
 <link rel="stylesheet" href="/admin.css">
+<link rel="stylesheet" href="/fonts.css">
 <link rel="stylesheet" href="/summary.css">
 </head>
 <body>
@@ -21,20 +22,55 @@
 <main class="sum-layout">
 
   <section class="card sum-side">
-    <h2>画像の設定</h2>
+    <h2>デザイン</h2>
+    <div class="theme-grid" id="theme-grid"></div>
 
+    <label class="field" id="accent-field" hidden>
+      <span>アクセント色</span>
+      <select id="o-accent">
+        <option value="blue">青むらさき（標準）</option>
+        <option value="red">レッド</option>
+        <option value="green">グリーン</option>
+        <option value="pink">ピンク</option>
+        <option value="orange">オレンジ</option>
+        <option value="mono">モノトーン</option>
+      </select>
+    </label>
+
+    <h2 class="sec">文字のフォントと大きさ</h2>
+    <p class="hint">変えたい場所を選んでから、フォントや大きさを選んでください。</p>
+    <div class="part-tabs" id="part-tabs"></div>
+
+    <div class="part-panel">
+      <label class="field">
+        <span><b id="part-name">タイトル</b>の大きさ <b id="part-size-label">100</b> %</span>
+        <input type="range" id="part-size" min="50" max="250" step="5" value="100">
+      </label>
+
+      <div class="font-grid" id="font-grid"></div>
+
+      <div class="custom-font">
+        <span class="custom-font-label">PCに入っているフォントを使う</span>
+        <div class="custom-font-row">
+          <input type="text" id="custom-font" list="custom-font-list" maxlength="40" placeholder="例）HGP創英角ﾎﾟｯﾌﾟ体">
+          <button type="button" class="btn btn-ghost btn-sm" id="custom-font-use">使う</button>
+        </div>
+        <datalist id="custom-font-list"></datalist>
+        <button type="button" class="btn btn-ghost btn-sm" id="local-fonts" hidden>PCのフォント一覧を読み込む</button>
+        <p class="hint" id="custom-font-hint">フォント名はWordなどのフォント欄に出る名前をそのまま入れてください。</p>
+      </div>
+
+      <div class="part-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="font-all">このフォントを全部の文字に使う</button>
+        <button type="button" class="btn btn-ghost btn-sm" id="font-reset">テーマのおすすめに戻す</button>
+      </div>
+    </div>
+
+    <h2 class="sec">画像の中身</h2>
     <div class="form">
       <label class="field">
         <span>どの日の成績にしますか</span>
         <select id="o-day"></select>
-      </label>
-
-      <label class="field">
-        <span>色</span>
-        <select id="o-theme">
-          <option value="dark">ダーク（黒背景）</option>
-          <option value="light">ライト（白背景）</option>
-        </select>
       </label>
 
       <label class="field">
@@ -60,35 +96,8 @@
       </label>
 
       <label class="field">
-        <span>フォント</span>
-        <select id="o-font">
-          <option value="gothic">ゴシック（標準）</option>
-          <option value="ud">UDゴシック（太め・見やすい）</option>
-          <option value="mincho">明朝</option>
-          <option value="kyokasho">教科書体</option>
-        </select>
-      </label>
-
-      <label class="field">
-        <span>アクセント色</span>
-        <select id="o-accent">
-          <option value="blue">青むらさき（標準）</option>
-          <option value="red">レッド</option>
-          <option value="green">グリーン</option>
-          <option value="pink">ピンク</option>
-          <option value="orange">オレンジ</option>
-          <option value="mono">モノトーン</option>
-        </select>
-      </label>
-
-      <label class="field">
         <span>ひとこと（画像の下に入ります・空欄可）</span>
         <input type="text" id="o-note" maxlength="60" placeholder="例）参加ありがとうございました！">
-      </label>
-
-      <label class="field">
-        <span>ひとことの大きさ <b id="o-note-size-label">22</b> px</span>
-        <input type="range" id="o-note-size" min="14" max="48" step="1" value="22">
       </label>
     </div>
 
@@ -142,6 +151,8 @@
 
 </main>
 
+<script src="/font-list.js"></script>
+<script src="/summary-themes.js"></script>
 <script src="/summary.js"></script>
 </body>
 </html>

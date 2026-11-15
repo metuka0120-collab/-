@@ -366,6 +366,7 @@ function applyState(next) {
 // ---------------------------------------------------------
 function render() {
   renderVersion();
+  renderOverlayDesign();
   mountStampPicker($('q-stamps'), ui.quickStamps);
   renderRecruit();
   renderRoom();
@@ -382,6 +383,78 @@ function render() {
 function renderVersion() {
   var el = $('app-ver');
   if (el) el.textContent = state.appVersion ? 'v' + state.appVersion : '';
+}
+
+// --- OBS表示のデザイン ---
+var OVERLAY_THEMES = [
+  { id: 'pop',     label: 'ポップ',       sw: ['#FFF7E8', '#FFE27A', '#FF9DB4', '#2B2340'] },
+  { id: 'yume',    label: 'ゆめかわ',     sw: ['#F3E3FF', '#FFE3F1', '#DDF6F3', '#C9A0FF'] },
+  { id: 'note',    label: 'ノート',       sw: ['#FBF8F0', '#D6E6F2', '#FFD666', '#E2483D'] },
+  { id: 'retro',   label: 'レトロゲーム', sw: ['#1E1840', '#FFFFFF', '#FFD93D', '#45F07F'] },
+  { id: 'chic',    label: 'シック',       sw: ['#F4EFE6', '#26231F', '#94703F', '#A84B36'] },
+  { id: 'classic', label: 'クラシック',   sw: ['#12141F', '#45B6FF', '#A45CFF', '#4FE39B'] }
+];
+
+/** フォントの選択肢（おまかせ → 同梱 → Windows → 自分で入れたもの） */
+function fontOptions(current) {
+  var list = window.FONT_LIST || [];
+  var group = function (name, items) {
+    return '<optgroup label="' + name + '">' + items.map(function (f) {
+      return '<option value="' + esc(f.id) + '">' + esc(f.label) + '</option>';
+    }).join('') + '</optgroup>';
+  };
+  var html = '<option value="">おまかせ（テーマのおすすめ）</option>';
+  html += group('アプリに入っているフォント', list.filter(function (f) { return f.group === 'bundled'; }));
+  html += group('Windows のフォント', list.filter(function (f) { return f.group === 'windows'; }));
+  if (current && current.indexOf('custom:') === 0) {
+    html += '<optgroup label="PCのフォント"><option value="' + esc(current) + '">' + esc(current.slice(7)) + '</option></optgroup>';
+  }
+  return html;
+}
+
+function renderOverlayDesign() {
+  var design = (state.settings && state.settings.overlay) || {};
+  var theme = design.theme || 'pop';
+  var fonts = design.fonts || {};
+  var sizes = design.sizes || {};
+
+  var themesHtml = OVERLAY_THEMES.map(function (t) {
+    return '<button type="button" class="ovd-theme' + (t.id === theme ? ' on' : '') + '" data-ovtheme="' + t.id + '">' +
+      '<span class="ovd-sw">' + t.sw.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join('') + '</span>' +
+      esc(t.label) + '</button>';
+  }).join('');
+  var box = $('ovd-themes');
+  if (box.__html !== themesHtml) { box.__html = themesHtml; box.innerHTML = themesHtml; }
+
+  ['name', 'label'].forEach(function (part) {
+    var select = $('ovd-font-' + part);
+    if (document.activeElement === select) return;
+    var html = fontOptions(fonts[part]);
+    if (select.__html !== html) { select.__html = html; select.innerHTML = html; }
+    select.value = fonts[part] || '';
+
+    var range = $('ovd-size-' + part);
+    var size = Number(sizes[part]) || 100;
+    if (document.activeElement !== range) range.value = size;
+    $('ovd-size-' + part + '-label').textContent = range.value;
+  });
+}
+
+/** OBS表示のデザインを保存する（つまみを動かしている間は少し待ってから） */
+var overlaySaveTimer = null;
+var pendingOverlay = {};
+function saveOverlayDesign(patch, wait) {
+  // 続けて変えても取りこぼさないよう、送る前の変更をまとめておく
+  ['fonts', 'sizes'].forEach(function (key) {
+    if (patch[key]) pendingOverlay[key] = Object.assign({}, pendingOverlay[key], patch[key]);
+  });
+  if (patch.theme) pendingOverlay.theme = patch.theme;
+  clearTimeout(overlaySaveTimer);
+  overlaySaveTimer = setTimeout(function () {
+    var body = pendingOverlay;
+    pendingOverlay = {};
+    api('PUT', '/api/settings', { overlay: body });
+  }, wait || 0);
 }
 
 // --- 対戦中 ---
@@ -796,6 +869,33 @@ $('f-result').addEventListener('change', function (e) { ui.filterResult = e.targ
 $('clear-today').addEventListener('click', function () {
   if (!window.confirm('本日の対戦履歴をすべて削除します。よろしいですか？（元に戻せません）')) return;
   api('POST', '/api/history/clear-today');
+});
+
+// OBS表示のデザイン
+$('ovd-themes').addEventListener('click', function (e) {
+  var btn = e.target.closest('[data-ovtheme]');
+  if (!btn) return;
+  saveOverlayDesign({ theme: btn.dataset.ovtheme });
+});
+
+['name', 'label'].forEach(function (part) {
+  $('ovd-font-' + part).addEventListener('change', function (e) {
+    var fonts = {};
+    fonts[part] = e.target.value;
+    saveOverlayDesign({ fonts: fonts });
+  });
+  $('ovd-size-' + part).addEventListener('input', function (e) {
+    $('ovd-size-' + part + '-label').textContent = e.target.value;
+    var sizes = {};
+    sizes[part] = Number(e.target.value);
+    saveOverlayDesign({ sizes: sizes }, 250);
+  });
+});
+
+$('ovd-custom-use').addEventListener('click', function () {
+  var name = $('ovd-custom').value.replace(/["'`\\;{}<>()]/g, '').trim();
+  if (!name) { window.alert('フォント名を入れてください。'); return; }
+  saveOverlayDesign({ fonts: { name: 'custom:' + name.slice(0, 40) } });
 });
 
 // 黒い画面を出さずに起動したときのための終了ボタン

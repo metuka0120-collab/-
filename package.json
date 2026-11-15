@@ -1,6 +1,6 @@
 {
   "name": "dmps-stream-manager",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "description": "デュエル・マスターズ プレイス 視聴者参加型配信用 管理ツール (管理画面 + OBSオーバーレイ)",
   "main": "server.js",
@@ -11,6 +11,17 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@fontsource/dela-gothic-one": "^5.3.0",
+    "@fontsource/dotgothic16": "^5.3.1",
+    "@fontsource/hachi-maru-pop": "^5.3.0",
+    "@fontsource/kiwi-maru": "^5.3.1",
+    "@fontsource/klee-one": "^5.3.1",
+    "@fontsource/mochiy-pop-one": "^5.3.0",
+    "@fontsource/rocknroll-one": "^5.3.1",
+    "@fontsource/shippori-mincho": "^5.3.0",
+    "@fontsource/yusei-magic": "^5.3.0",
+    "@fontsource/zen-kaku-gothic-new": "^5.3.1",
+    "@fontsource/zen-maru-gothic": "^5.3.1",
     "express": "^4.19.2",
     "ws": "^8.18.0"
   }

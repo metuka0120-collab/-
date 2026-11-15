@@ -11,6 +11,7 @@
        ?count=1    「本日N戦目」も出す（既定は出さない）
        ?idle=hide  対戦者がいないときカードごと隠す（既定は「待機中」を表示）
        ?idle=show  対戦者がいないとき「待機中」カードを表示（既定）
+       ?theme=pop  デザインをURLで決める（ふだんは記録画面で選んだものになる）
    ========================================================= */
 
 const params = new URLSearchParams(location.search);
@@ -37,6 +38,76 @@ const elRecLose = document.getElementById('rec-lose');
 const elRecRate = document.getElementById('rec-rate');
 
 if (!SHOW_STATS) overlay.classList.add('no-record');
+
+// ---------------------------------------------------------
+// デザイン（テーマとフォント）
+// ---------------------------------------------------------
+const THEMES = ['pop', 'yume', 'note', 'retro', 'chic', 'classic'];
+const URL_THEME = THEMES.indexOf(params.get('theme')) !== -1 ? params.get('theme') : '';
+
+/** テーマごとのおすすめフォント（name … リスナー名、label … ラベルや数字） */
+const THEME_FONTS = {
+  pop:     { name: 'mochiy',    label: 'zenmaru' },
+  yume:    { name: 'hachimaru', label: 'kiwimaru' },
+  note:    { name: 'yusei',     label: 'klee' },
+  retro:   { name: 'dot',       label: 'dot' },
+  chic:    { name: 'shippori',  label: 'zenkaku' },
+  classic: { name: 'gothic',    label: 'gothic' }
+};
+const FALLBACK_FONT = '"Yu Gothic UI", "Meiryo", "Segoe UI", system-ui, sans-serif';
+
+function fontInfo(id) {
+  const list = window.FONT_LIST || [];
+  for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+  return null;
+}
+
+function fontStack(value) {
+  value = String(value || '');
+  if (value.indexOf('custom:') === 0) return '"' + value.slice(7).replace(/"/g, '') + '", ' + FALLBACK_FONT;
+  const info = fontInfo(value);
+  return info ? info.stack : FALLBACK_FONT;
+}
+
+// 同梱フォントは、使うものだけ読み込む（OBSを軽くするため）
+const linkedFonts = new Set();
+function loadFonts(ids) {
+  const missing = ids.filter((id) => {
+    const info = fontInfo(id);
+    return info && info.group === 'bundled' && !linkedFonts.has(id);
+  });
+  if (!missing.length) return;
+  missing.forEach((id) => linkedFonts.add(id));
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = '/fonts.css?ids=' + missing.join(',');
+  document.head.appendChild(link);
+}
+
+let lastDesign = '';
+function applyDesign(settings) {
+  const design = settings.overlay || {};
+  const theme = URL_THEME || (THEMES.indexOf(design.theme) !== -1 ? design.theme : 'pop');
+  const fonts = design.fonts || {};
+  const sizes = design.sizes || {};
+  const nameFont = fonts.name || THEME_FONTS[theme].name;
+  const labelFont = fonts.label || THEME_FONTS[theme].label;
+  const nameScale = (Number(sizes.name) || 100) / 100;
+  const labelScale = (Number(sizes.label) || 100) / 100;
+
+  const key = [theme, nameFont, labelFont, nameScale, labelScale].join('|');
+  if (key === lastDesign) return;
+  lastDesign = key;
+
+  document.body.className = 'th-' + theme;
+  // body の文字にも効かせたいので、いちばん外側に置く
+  const root = document.documentElement.style;
+  root.setProperty('--font-name', fontStack(nameFont));
+  root.setProperty('--font-label', fontStack(labelFont));
+  root.setProperty('--ns', String(nameScale));
+  root.setProperty('--ls', String(labelScale));
+  loadFonts([nameFont, labelFont]);
+}
 if (SCALE !== 1) overlay.style.zoom = String(SCALE);
 
 let lastCurrentId = null;
@@ -76,6 +147,7 @@ function render(state) {
   const current = state.current;
   const stats = state.stats || { wins: 0, losses: 0, winRate: 0, total: 0 };
   const settings = state.settings || {};
+  applyDesign(settings);
 
   // ルームID（入っているときだけ出す）
   const roomId = SHOW_ROOM ? String(settings.roomId || '').trim() : '';

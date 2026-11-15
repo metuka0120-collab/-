@@ -78,3 +78,117 @@ input[type="range"] {
 /* ドラッグできることを伝える */
 #cv { cursor: grab; }
 #cv.dragging { cursor: grabbing; }
+
+/* ---------- デザイン（テーマ）の選択 ---------- */
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px 9px 9px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.theme-btn:hover { border-color: var(--accent); }
+.theme-btn.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.theme-sw { display: flex; height: 22px; border-radius: 6px; overflow: hidden; }
+.theme-sw i { flex: 1; }
+.theme-name { font-size: 13px; font-weight: 700; }
+.theme-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* ---------- 文字の部位 ---------- */
+.part-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 6px 0 10px;
+}
+.part-tab {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.part-tab.on { background: var(--accent); border-color: var(--accent); color: #06121f; font-weight: 700; }
+/* 自分で変えた部位には点をつける */
+.part-tab.changed::after { content: " ●"; font-size: 8px; vertical-align: 2px; }
+
+.part-panel {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 10px 12px;
+}
+
+/* ---------- フォントの見本 ---------- */
+.font-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  max-height: 330px;
+  overflow-y: auto;
+  margin-top: 8px;
+  padding-right: 3px;
+}
+.font-group {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dim);
+  letter-spacing: .06em;
+  margin-top: 6px;
+}
+.font-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.font-chip:hover { border-color: var(--accent); }
+.font-chip.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.font-sample {
+  font-size: 19px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.font-label {
+  font-size: 10.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.font-label em { font-style: normal; color: var(--dim); margin-left: 4px; }
+
+.custom-font { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.custom-font-label { font-size: 12px; color: var(--muted); }
+.custom-font-row { display: flex; gap: 6px; }
+.custom-font-row input { flex: 1; min-width: 0; }
+
+.part-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* .field は display を指定しているので、hidden を明示しないと消えない */
+.field[hidden] { display: none; }
